@@ -1,0 +1,9 @@
+[package]
+name = "station-emulator"
+version = "0.1.0"
+authors = ["romfrolov <justcallmefrolov@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+dotenv = "0.14.1"
+ws = "0.9.0"
