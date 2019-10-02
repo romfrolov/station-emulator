@@ -1,14 +1,54 @@
 extern crate dotenv;
 
 use std::env;
-use ws::{connect, CloseCode};
+use url;
+use ws::{connect, Handler, Sender, Handshake, Result, Message, CloseCode, Request};
 
 #[derive(Debug)]
 struct Config {
     csms_url: String,
-    ocpp_version: String,
     station_id: String,
     serial_number: String
+}
+
+// Our Handler struct.
+// Here we explicity indicate that the Client needs a Sender,
+// whereas a closure captures the Sender for us automatically.
+struct Client {
+    out: Sender
+}
+
+// We implement the Handler trait for Client so that we can get more
+// fine-grained control of the connection.
+impl Handler for Client {
+
+    fn build_request(&mut self, url: &url::Url) -> Result<Request> {
+        let mut req = Request::from_url(url).unwrap();
+        req.add_protocol("ocpp2.0");
+        Ok(req)
+    }
+
+    // `on_open` will be called only after the WebSocket handshake is successful
+    // so at this point we know that the connection is ready to send/receive messages.
+    // We ignore the `Handshake` for now, but you could also use this method to setup
+    // Handler state or reject the connection based on the details of the Request
+    // or Response, such as by checking cookies or Auth headers.
+    fn on_open(&mut self, _: Handshake) -> Result<()> {
+        // Send BootNotification request.
+
+        let msg_type_id = "2";
+        let msg_id = "123";
+        let msg_action = "BootNotification";
+        let msg_payload = "{\"reason\":\"PowerUp\",\"chargingStation\":{\"serialNumber\":\"emu2.0\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{\"iccid\":\"\",\"imsi\":\"\"}}}";
+
+        self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))
+    }
+
+    fn on_message(&mut self, msg: Message) -> Result<()> {
+        // Close the connection when we get a response from the server
+        println!("Got message: {}", msg);
+        self.out.close(CloseCode::Normal)
+    }
 }
 
 fn main() {
@@ -17,11 +57,6 @@ fn main() {
     let csms_url = match env::var("CSMS_URL") {
         Ok(var) => var,
         Err(e) => panic!("Couldn't read CSMS_URL ({})", e),
-    };
-
-    let ocpp_version = match env::var("OCPP_VERSION") {
-        Ok(var) => var,
-        Err(e) => panic!("Couldn't read OCPP_VERSION ({})", e),
     };
 
     let station_id = match env::var("STATION_ID") {
@@ -36,28 +71,17 @@ fn main() {
 
     let config = Config {
         csms_url: csms_url,
-        ocpp_version: ocpp_version,
         station_id: station_id,
         serial_number: serial_number
     };
 
-    println!("OCPP version: {}",  config.ocpp_version);
+    println!("OCPP version: 2.0");
     println!("Serial number: {:?}", config.serial_number);
-    println!("Station id: {:?}",    config.station_id);
+    println!("Station id: {:?}", config.station_id);
 
     let mut connection_string: String = config.csms_url.to_owned();
     connection_string.push_str("/");
     connection_string.push_str(&config.station_id);
 
-    connect(connection_string, |out| {
-        // TODO Send BootNotification request.
-        let boot_notification_msg = "{\"reason\":\"PowerUp\",\"chargingStation\":{\"serialNumber\":\"emu2.0\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{\"iccid\":\"\",\"imsi\":\"\"}}}";
-
-        out.send(boot_notification_msg).unwrap();
-
-        move |msg| {
-            println!("Got message: {}", msg);
-            out.close(CloseCode::Normal)
-        }
-    }).unwrap()
+    connect(connection_string, |out| { Client { out: out } }).unwrap()
 }
