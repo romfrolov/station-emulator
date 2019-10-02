@@ -3,6 +3,7 @@ extern crate dotenv;
 use std::env;
 use url;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, CloseCode, Request};
+use uuid::Uuid;
 
 #[derive(Debug)]
 struct Config {
@@ -37,7 +38,7 @@ impl Handler for Client {
         // Send BootNotification request.
 
         let msg_type_id = "2";
-        let msg_id = "123";
+        let msg_id = Uuid::new_v4();
         let msg_action = "BootNotification";
         let msg_payload = "{\"reason\":\"PowerUp\",\"chargingStation\":{\"serialNumber\":\"emu2.0\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{\"iccid\":\"\",\"imsi\":\"\"}}}";
 
