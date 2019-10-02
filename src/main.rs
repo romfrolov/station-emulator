@@ -9,14 +9,14 @@ use uuid::Uuid;
 struct Config {
     csms_url: String,
     station_id: String,
-    serial_number: String
+    serial_number: String,
 }
 
 // Our Handler struct.
 // Here we explicity indicate that the Client needs a Sender,
 // whereas a closure captures the Sender for us automatically.
 struct Client {
-    out: Sender
+    out: Sender,
 }
 
 // We implement the Handler trait for Client so that we can get more
@@ -46,8 +46,45 @@ impl Handler for Client {
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        // Close the connection when we get a response from the server
-        println!("Got message: {}", msg);
+        println!("Raw message: {}", msg);
+
+        let text_msg = match msg.as_text() {
+            Ok(text) => &text[1..text.chars().count() - 1],
+            Err(e) => panic!("Couldn't convert a message to text ({})", e),
+        };
+
+        let parsed_msg: Vec<&str> = text_msg.split(",").collect();
+
+        let msg_type_id = parsed_msg[0];
+        let msg_id = parsed_msg[1];
+
+        println!("Message type ID: {}", msg_type_id);
+        println!("Message ID: {}", msg_id);
+
+        match msg_type_id {
+            "2" => {
+                println!("CALL");
+
+                // TODO Get action and payload of the message.
+
+                // TODO Handler for SetVariables request.
+            },
+            "3" => {
+                println!("CALLRESULT")
+
+                // TODO Get payload of the message.
+
+                // TODO Handler for BootNotification response:
+                // - Activate connectors when received response on BootNotification.
+                // - Start sending Heartbeat after receiving response on BootNotification.
+            },
+            "4" => {
+                println!("CALLERROR")
+            },
+            _ => println!("Unknown message type ID"),
+        }
+
+        // Close the connection when we get a response from the server.
         self.out.close(CloseCode::Normal)
     }
 }
