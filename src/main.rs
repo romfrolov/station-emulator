@@ -45,9 +45,15 @@ fn main() {
     println!("Serial number: {:?}", config.serial_number);
     println!("Station id: {:?}",    config.station_id);
 
-    connect(config.csms_url, |out| {
+    let mut connection_string: String = config.csms_url.to_owned();
+    connection_string.push_str("/");
+    connection_string.push_str(&config.station_id);
+
+    connect(connection_string, |out| {
         // TODO Send BootNotification request.
-        // out.send(bootNotificationMsg).unwrap();
+        let boot_notification_msg = "{\"reason\":\"PowerUp\",\"chargingStation\":{\"serialNumber\":\"emu2.0\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{\"iccid\":\"\",\"imsi\":\"\"}}}";
+
+        out.send(boot_notification_msg).unwrap();
 
         move |msg| {
             println!("Got message: {}", msg);
