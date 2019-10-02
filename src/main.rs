@@ -12,9 +12,7 @@ struct Config {
     serial_number: String,
 }
 
-// Our Handler struct.
-// Here we explicity indicate that the Client needs a Sender,
-// whereas a closure captures the Sender for us automatically.
+// Websocket Handler struct.
 struct Client {
     out: Sender,
 }
@@ -53,6 +51,8 @@ impl Handler for Client {
             Err(e) => panic!("Couldn't convert a message to text ({})", e),
         };
 
+        // BUG Payload is being split which is undesired.
+
         let parsed_msg: Vec<&str> = text_msg.split(",").collect();
 
         let msg_type_id = parsed_msg[0];
@@ -65,21 +65,27 @@ impl Handler for Client {
             "2" => {
                 println!("CALL");
 
-                // TODO Get action and payload of the message.
+                let action = parsed_msg[2];
+                let payload = parsed_msg[3];
+
+                println!("Action: {}", action);
+                println!("Payload: {}", payload);
 
                 // TODO Handler for SetVariables request.
             },
             "3" => {
-                println!("CALLRESULT")
+                println!("CALLRESULT");
 
-                // TODO Get payload of the message.
+                let payload = parsed_msg[2];
+
+                println!("Payload: {}", payload);
 
                 // TODO Handler for BootNotification response:
                 // - Activate connectors when received response on BootNotification.
                 // - Start sending Heartbeat after receiving response on BootNotification.
             },
             "4" => {
-                println!("CALLERROR")
+                println!("CALLERROR");
             },
             _ => println!("Unknown message type ID"),
         }

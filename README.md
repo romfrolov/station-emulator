@@ -1,6 +1,7 @@
-### Station emulator
+## Station emulator
+*Work in progress*
 
-This is going to be an electric vehicle charging station emulator which supports OCPP 2.0.
+Electric vehicle charging station emulator which supports OCPP 2.0.
 
 ### List of supported messages
 
