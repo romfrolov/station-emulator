@@ -70,9 +70,6 @@ impl Handler for Client {
     }
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
-        // Schedule a timeout to send Heartbeat once per day.
-        self.out.timeout(86000_000, HEARTBEAT)?;
-
         // Get serial number from environment.
         let serial_number = match env::var("SERIAL_NUMBER") {
             Ok(var) => var,
@@ -148,8 +145,21 @@ impl Handler for Client {
                 match msg_from_map_action.as_str() {
                     "BootNotification" => {
                         // TODO Get status from payload.
+
                         // TODO Activate connectors when received response on BootNotification.
-                        // TODO Start sending Heartbeat after receiving response on BootNotification.
+
+                        // Send StatusNotification message.
+                        let status_notification_msg_type_id = CALL;
+                        let status_notification_msg_id = Uuid::new_v4();
+                        let status_notification_msg_action = "StatusNotification";
+                        let status_notification_msg_payload = "{\"timestamp\":\"2019-10-03T15:48:20+00:00\",\"connectorStatus\":\"Available\",\"evseId\":0,\"connectorId\":1}"; // TODO Unmock.
+
+                        let status_notification_msg = format!("[{}, \"{}\", \"{}\", {}]", status_notification_msg_type_id, status_notification_msg_id, status_notification_msg_action, status_notification_msg_payload);
+
+                        self.out.send(status_notification_msg)?;
+
+                        // Schedule a timeout to send Heartbeat once per day.
+                        self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock.
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
                 }
