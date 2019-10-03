@@ -112,49 +112,61 @@ impl Handler for Client {
 
         match msg_type_id {
             CALL => {
-                println!("CALL");
-
                 let action = &parsed_msg[2].to_string().slice(1, -1);
                 let payload = parsed_msg[3];
 
-                println!("Action: {}", action);
-                println!("Payload: {}", payload);
+                println!("CALL Action: {}", action);
+                println!("CALL Payload: {}", payload);
 
-                // TODO Handler for SetVariables request.
-                // TODO Handler for GetVariables request.
+                match action.as_str() {
+                    "SetVariables" => {
+                        // Send SetVariables response.
+
+                        let response_msg_type_id = CALLRESULT;
+                        let response_msg_payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
+
+                        let response_msg = format!("[{}, \"{}\", {}]", response_msg_type_id, msg_id, response_msg_payload);
+
+                        self.out.send(response_msg)?;
+                    },
+                    _ => println!("No request handler for action: {}", action),
+                }
             },
             CALLRESULT => {
-                println!("CALLRESULT");
-
                 let payload = parsed_msg[2];
 
-                println!("Payload: {}", payload);
+                println!("CALLRESULT Payload: {}", payload);
 
                 let msg_from_map = get_message(msg_id.to_string());
 
                 println!("Message from map: {:?}", msg_from_map);
 
-                // let msg_from_map_type_id = parsed_msg[0];
-                // let msg_from_map_id = parsed_msg[1].to_string().slice(1, -1);
-                // let msg_from_map_action = &parsed_msg[2].to_string().slice(1, -1);
+                // TODO Parse message from map and fix the lines below.
+                let msg_from_map_action = &msg_from_map.to_string().slice(1, -1);
                 // let msg_from_map_payload = parsed_msg[3];
 
+                match msg_from_map_action.as_str() {
+                    "BootNotification" => {
+                        // TODO Get status from payload.
+                        // TODO Activate connectors when received response on BootNotification.
+                        // TODO Start sending Heartbeat after receiving response on BootNotification.
+                    },
+                    _=> println!("No response handler for action: {}", msg_from_map_action),
+                }
+
                 // TODO Handler for BootNotification response:
-                // - Activate connectors when received response on BootNotification.
-                // - Start sending Heartbeat after receiving response on BootNotification.
+
 
                 //statusNotificationMsgId, 'Available', evse_id, connnector.id
             },
             CALLERROR => {
-                println!("CALLERROR");
-
                 let error_code = parsed_msg[2];
                 let error_description = parsed_msg[3];
                 let error_details = parsed_msg[4];
 
-                println!("Error code: {}", error_code);
-                println!("Error Description: {}", error_description);
-                println!("Error details: {}", error_details);
+                println!("CALLERROR Error code: {}", error_code);
+                println!("CALLERROR Error Description: {}", error_description);
+                println!("CALLERROR Error details: {}", error_details);
             },
             _ => println!("Unknown message type ID"),
         }
