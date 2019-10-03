@@ -9,6 +9,9 @@ use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, E
 use uuid::Uuid;
 
 const HEARTBEAT: Token = Token(1);
+const CALL: &str = "2";
+const CALLRESULT: &str = "3";
+const CALLERROR: &str = "4";
 
 #[derive(Debug)]
 struct Config {
@@ -34,14 +37,20 @@ impl Handler for Client {
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
         // Schedule a timeout to send Heartbeat once per day.
-        self.out.timeout(1_000, HEARTBEAT)?;
+        self.out.timeout(86000_000, HEARTBEAT)?;
+
+        // Get serial number from environment.
+        let serial_number = match env::var("SERIAL_NUMBER") {
+            Ok(var) => var,
+            Err(e) => panic!("Couldn't read SERIAL_NUMBER ({})", e),
+        };
 
         // Send BootNotification request.
 
-        let msg_type_id = "2";
+        let msg_type_id = CALL;
         let msg_id = Uuid::new_v4();
         let msg_action = "BootNotification";
-        let msg_payload = "{\"reason\":\"PowerUp\",\"chargingStation\":{\"serialNumber\":\"emu2.0\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{\"iccid\":\"\",\"imsi\":\"\"}}}";
+        let msg_payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number);
 
         self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))
     }
@@ -55,7 +64,6 @@ impl Handler for Client {
         };
 
         // BUG Payload is being split which is undesired.
-
         let parsed_msg: Vec<&str> = text_msg.split(",").collect();
 
         let msg_type_id = parsed_msg[0];
@@ -65,7 +73,7 @@ impl Handler for Client {
         println!("Message ID: {}", msg_id);
 
         match msg_type_id {
-            "2" => {
+            CALL => {
                 println!("CALL");
 
                 let action = parsed_msg[2];
@@ -75,8 +83,9 @@ impl Handler for Client {
                 println!("Payload: {}", payload);
 
                 // TODO Handler for SetVariables request.
+                // TODO Handler for GetVariables request.
             },
-            "3" => {
+            CALLRESULT => {
                 println!("CALLRESULT");
 
                 let payload = parsed_msg[2];
@@ -87,8 +96,16 @@ impl Handler for Client {
                 // - Activate connectors when received response on BootNotification.
                 // - Start sending Heartbeat after receiving response on BootNotification.
             },
-            "4" => {
+            CALLERROR => {
                 println!("CALLERROR");
+
+                let error_code = parsed_msg[2];
+                let error_description = parsed_msg[3];
+                let error_details = parsed_msg[4];
+
+                println!("Error code: {}", error_code);
+                println!("Error Description: {}", error_description);
+                println!("Error details: {}", error_details);
             },
             _ => println!("Unknown message type ID"),
         }
@@ -111,11 +128,16 @@ impl Handler for Client {
     fn on_timeout(&mut self, event: Token) -> Result<()> {
         match event {
             HEARTBEAT => {
-                println!("DEBUG: Heartbeat");
-                // TODO Send Heartbeat message.
+                // Send Heartbeat message.
+                let msg_type_id = CALL;
+                let msg_id = Uuid::new_v4();
+                let msg_action = "Heartbeat";
+                let msg_payload = "{}";
+
+                self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))?;
 
                 // Schedule next message.
-                self.out.timeout(1_000, HEARTBEAT)?;
+                self.out.timeout(86000_000, HEARTBEAT)?;
                 Ok(())
             },
             // No other events are possible.
