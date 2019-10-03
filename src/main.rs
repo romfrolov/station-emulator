@@ -1,8 +1,12 @@
+#[macro_use]
+extern crate lazy_static;
 extern crate dotenv;
 extern crate mio_extras;
 extern crate time;
 
 use std::env;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use url;
 use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
@@ -12,6 +16,36 @@ const HEARTBEAT: Token = Token(1);
 const CALL: &str = "2";
 const CALLRESULT: &str = "3";
 const CALLERROR: &str = "4";
+
+lazy_static! {
+    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+}
+
+fn set_message(key: String, value: String) {
+    MESSAGES.lock().unwrap().insert(key, value);
+}
+
+fn get_message(key: String) -> String {
+    match MESSAGES.lock().unwrap().get(&key) {
+        Some(value) => value.to_string(),
+        None => "".to_string()
+    }
+}
+
+trait StringUtils {
+    fn slice(&self, begin: usize, end: isize) -> Self;
+}
+
+impl StringUtils for String {
+    fn slice(&self, begin: usize, mut end: isize) -> Self {
+        if end < 0 {
+            end *= -1;
+            self[begin..self.chars().count() - end as usize].chars().collect()
+        } else {
+            self[begin..end as usize].chars().collect()
+        }
+    }
+}
 
 #[derive(Debug)]
 struct Config {
@@ -52,7 +86,11 @@ impl Handler for Client {
         let msg_action = "BootNotification";
         let msg_payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number);
 
-        self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))
+        let msg = format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload);
+
+        set_message(msg_id.to_string(), msg.to_owned());
+
+        self.out.send(msg)
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
@@ -67,7 +105,7 @@ impl Handler for Client {
         let parsed_msg: Vec<&str> = text_msg.split(",").collect();
 
         let msg_type_id = parsed_msg[0];
-        let msg_id = parsed_msg[1];
+        let msg_id = parsed_msg[1].to_string().slice(1, -1);
 
         println!("Message type ID: {}", msg_type_id);
         println!("Message ID: {}", msg_id);
@@ -76,7 +114,7 @@ impl Handler for Client {
             CALL => {
                 println!("CALL");
 
-                let action = parsed_msg[2];
+                let action = &parsed_msg[2].to_string().slice(1, -1);
                 let payload = parsed_msg[3];
 
                 println!("Action: {}", action);
@@ -92,9 +130,20 @@ impl Handler for Client {
 
                 println!("Payload: {}", payload);
 
+                let msg_from_map = get_message(msg_id.to_string());
+
+                println!("Message from map: {:?}", msg_from_map);
+
+                // let msg_from_map_type_id = parsed_msg[0];
+                // let msg_from_map_id = parsed_msg[1].to_string().slice(1, -1);
+                // let msg_from_map_action = &parsed_msg[2].to_string().slice(1, -1);
+                // let msg_from_map_payload = parsed_msg[3];
+
                 // TODO Handler for BootNotification response:
                 // - Activate connectors when received response on BootNotification.
                 // - Start sending Heartbeat after receiving response on BootNotification.
+
+                //statusNotificationMsgId, 'Available', evse_id, connnector.id
             },
             CALLERROR => {
                 println!("CALLERROR");
