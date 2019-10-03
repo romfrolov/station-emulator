@@ -1,9 +1,14 @@
 extern crate dotenv;
+extern crate mio_extras;
+extern crate time;
 
 use std::env;
 use url;
-use ws::{connect, Handler, Sender, Handshake, Result, Message, CloseCode, Request};
+use ws::util::Token;
+use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
+
+const HEARTBEAT: Token = Token(1);
 
 #[derive(Debug)]
 struct Config {
@@ -27,12 +32,10 @@ impl Handler for Client {
         Ok(req)
     }
 
-    // `on_open` will be called only after the WebSocket handshake is successful
-    // so at this point we know that the connection is ready to send/receive messages.
-    // We ignore the `Handshake` for now, but you could also use this method to setup
-    // Handler state or reject the connection based on the details of the Request
-    // or Response, such as by checking cookies or Auth headers.
     fn on_open(&mut self, _: Handshake) -> Result<()> {
+        // Schedule a timeout to send Heartbeat once per day.
+        self.out.timeout(1_000, HEARTBEAT)?;
+
         // Send BootNotification request.
 
         let msg_type_id = "2";
@@ -90,8 +93,37 @@ impl Handler for Client {
             _ => println!("Unknown message type ID"),
         }
 
-        // Close the connection when we get a response from the server.
-        self.out.close(CloseCode::Normal)
+        Ok(())
+    }
+
+    fn on_close(&mut self, code: CloseCode, reason: &str) {
+       println!("WebSocket closing for ({:?}) {}", code, reason);
+       println!("Shutting down server after first connection closes.");
+       self.out.shutdown().unwrap();
+   }
+
+   // Shutdown on any error.
+   fn on_error(&mut self, err: Error) {
+        println!("Shutting down server for error: {}", err);
+        self.out.shutdown().unwrap();
+    }
+
+    fn on_timeout(&mut self, event: Token) -> Result<()> {
+        match event {
+            HEARTBEAT => {
+                println!("DEBUG: Heartbeat");
+                // TODO Send Heartbeat message.
+
+                // Schedule next message.
+                self.out.timeout(1_000, HEARTBEAT)?;
+                Ok(())
+            },
+            // No other events are possible.
+            _ => Err(Error::new(
+                ErrorKind::Internal,
+                "Invalid timeout token encountered!",
+            )),
+        }
     }
 }
 
