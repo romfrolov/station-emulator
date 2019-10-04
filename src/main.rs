@@ -1,8 +1,10 @@
 #[macro_use]
+
 extern crate lazy_static;
 extern crate dotenv;
 extern crate mio_extras;
 extern crate time;
+extern crate json;
 
 use std::env;
 use std::collections::HashMap;
@@ -12,10 +14,16 @@ use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
 
+macro_rules! block {
+    ($xs:block) => {
+        loop { let _ = $xs; break; }
+    };
+}
+
 const HEARTBEAT: Token = Token(1);
-const CALL: &str = "2";
-const CALLRESULT: &str = "3";
-const CALLERROR: &str = "4";
+const CALL: u8 = 2;
+const CALLRESULT: u8 = 3;
+const CALLERROR: u8 = 4;
 
 lazy_static! {
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -93,24 +101,24 @@ impl Handler for Client {
     fn on_message(&mut self, msg: Message) -> Result<()> {
         println!("Raw message: {}", msg);
 
-        let text_msg = match msg.as_text() {
-            Ok(text) => &text[1..text.chars().count() - 1],
-            Err(e) => panic!("Couldn't convert a message to text ({})", e),
+        let parsed_msg = match json::parse(msg.as_text()?) {
+            Ok(result) => result,
+            Err(e) => panic!("Error during parsing: {:?}", e),
         };
 
-        // BUG Payload is being split which is undesired.
-        let parsed_msg: Vec<&str> = text_msg.split(",").collect();
-
-        let msg_type_id = parsed_msg[0];
-        let msg_id = parsed_msg[1].to_string().slice(1, -1);
+        let msg_type_id = match parsed_msg[0].as_u8() {
+            Some(res) => res,
+            None => panic!("Error during parsing"),
+        };
+        let msg_id = parsed_msg[1].to_string();
 
         println!("Message type ID: {}", msg_type_id);
         println!("Message ID: {}", msg_id);
 
         match msg_type_id {
             CALL => {
-                let action = &parsed_msg[2].to_string().slice(1, -1);
-                let payload = parsed_msg[3];
+                let action = &parsed_msg[2].to_string();
+                let payload = &parsed_msg[3];
 
                 println!("CALL Action: {}", action);
                 println!("CALL Payload: {}", payload);
@@ -129,24 +137,32 @@ impl Handler for Client {
                     _ => println!("No request handler for action: {}", action),
                 }
             },
-            CALLRESULT => {
-                let payload = parsed_msg[2];
+            CALLRESULT => block!({
+                let payload = &parsed_msg[2];
 
                 println!("CALLRESULT Payload: {}", payload);
 
-                let msg_from_map = get_message(msg_id.to_string());
+                let msg_from_map = get_message(msg_id);
 
                 println!("Message from map: {:?}", msg_from_map);
 
-                // TODO Parse message from map and fix the lines below.
-                let msg_from_map_action = &msg_from_map.to_string().slice(1, -1);
+                if msg_from_map == "" {
+                    break;
+                }
+
+                let parsed_msg_from_map = match json::parse(&msg_from_map.to_owned()) {
+                    Ok(result) => result,
+                    Err(e) => panic!("Error during parsing: {:?}", e),
+                };
+
+                println!("Parsed message from map: {:?}", parsed_msg_from_map);
+
+                let msg_from_map_action = &parsed_msg_from_map[2].to_string();
                 // let msg_from_map_payload = parsed_msg[3];
 
                 match msg_from_map_action.as_str() {
                     "BootNotification" => {
                         // TODO Get status from payload.
-
-                        // TODO Activate connectors when received response on BootNotification.
 
                         // Send StatusNotification message.
                         let status_notification_msg_type_id = CALL;
@@ -163,16 +179,11 @@ impl Handler for Client {
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
                 }
-
-                // TODO Handler for BootNotification response:
-
-
-                //statusNotificationMsgId, 'Available', evse_id, connnector.id
-            },
+            }),
             CALLERROR => {
-                let error_code = parsed_msg[2];
-                let error_description = parsed_msg[3];
-                let error_details = parsed_msg[4];
+                let error_code = &parsed_msg[2];
+                let error_description = &parsed_msg[3];
+                let error_details = &parsed_msg[4];
 
                 println!("CALLERROR Error code: {}", error_code);
                 println!("CALLERROR Error Description: {}", error_description);

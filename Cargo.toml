@@ -12,3 +12,4 @@ uuid = { version = "0.7", features = ["serde", "v4"] }
 mio-extras = "2.0"
 time = "0.1.39"
 lazy_static = "1.4.0"
+json = "*"
