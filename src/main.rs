@@ -1,18 +1,20 @@
 #[macro_use]
-
 extern crate lazy_static;
 extern crate dotenv;
 extern crate mio_extras;
 extern crate time;
 extern crate json;
+extern crate chrono;
 
 use std::env;
 use std::collections::HashMap;
 use std::sync::Mutex;
+
 use url;
 use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
+use chrono::prelude::*;
 
 macro_rules! block {
     ($xs:block) => {
@@ -21,9 +23,13 @@ macro_rules! block {
 }
 
 const HEARTBEAT: Token = Token(1);
+// OCPP constants.
 const CALL: u8 = 2;
 const CALLRESULT: u8 = 3;
 const CALLERROR: u8 = 4;
+// Station constants.
+const MODEL: &str = "Model";
+const VENDOR_NAME: &str = "Vendor name";
 
 lazy_static! {
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -36,22 +42,7 @@ fn set_message(key: String, value: String) {
 fn get_message(key: String) -> String {
     match MESSAGES.lock().unwrap().get(&key) {
         Some(value) => value.to_string(),
-        None => "".to_string()
-    }
-}
-
-trait StringUtils {
-    fn slice(&self, begin: usize, end: isize) -> Self;
-}
-
-impl StringUtils for String {
-    fn slice(&self, begin: usize, mut end: isize) -> Self {
-        if end < 0 {
-            end *= -1;
-            self[begin..self.chars().count() - end as usize].chars().collect()
-        } else {
-            self[begin..end as usize].chars().collect()
-        }
+        None => "".to_string(),
     }
 }
 
@@ -65,6 +56,37 @@ struct Config {
 // Websocket Handler struct.
 struct Client {
     out: Sender,
+}
+
+fn create_boot_notification_request(msg_id: String, serial_number: String) -> String {
+    let action = "BootNotification";
+    let payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"{}\",\"vendorName\":\"{}\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number, MODEL, VENDOR_NAME);
+
+    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
+}
+
+fn create_status_notification_request(msg_id: String, evse_id: u8, connector_id: u8, status: &str) -> String {
+    let action = "StatusNotification";
+    let now = match Utc::now().with_nanosecond(0) {
+        Some(res) => res.to_rfc3339(),
+        None => panic!("Current date is empty."),
+    };
+    let payload = format!("{{\"timestamp\":\"{}\",\"connectorStatus\":\"{}\",\"evseId\":{},\"connectorId\":{}}}", now, status, evse_id, connector_id);
+
+    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
+}
+
+fn create_heartbeat_request(msg_id: String) -> String {
+    let action = "Heartbeat";
+    let payload = "{}";
+
+    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
+}
+
+fn create_set_variables_response(msg_id: String) -> String {
+    let payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
+
+    format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
 }
 
 // We implement the Handler trait for Client so that we can get more
@@ -86,12 +108,8 @@ impl Handler for Client {
 
         // Send BootNotification request.
 
-        let msg_type_id = CALL;
         let msg_id = Uuid::new_v4();
-        let msg_action = "BootNotification";
-        let msg_payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number);
-
-        let msg = format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload);
+        let msg = create_boot_notification_request(msg_id.to_string(), serial_number);
 
         set_message(msg_id.to_string(), msg.to_owned());
 
@@ -108,7 +126,7 @@ impl Handler for Client {
 
         let msg_type_id = match parsed_msg[0].as_u8() {
             Some(res) => res,
-            None => panic!("Error during parsing"),
+            None => panic!("Parsed message has no value."),
         };
         let msg_id = parsed_msg[1].to_string();
 
@@ -127,10 +145,7 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        let response_msg_type_id = CALLRESULT;
-                        let response_msg_payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
-
-                        let response_msg = format!("[{}, \"{}\", {}]", response_msg_type_id, msg_id, response_msg_payload);
+                        let response_msg = create_set_variables_response(msg_id);
 
                         self.out.send(response_msg)?;
                     },
@@ -143,8 +158,6 @@ impl Handler for Client {
                 println!("CALLRESULT Payload: {}", payload);
 
                 let msg_from_map = get_message(msg_id);
-
-                println!("Message from map: {:?}", msg_from_map);
 
                 if msg_from_map == "" {
                     break;
@@ -169,17 +182,16 @@ impl Handler for Client {
                             println!("BootNotification was accepted.");
 
                             // Send StatusNotification message.
-                            let status_notification_msg_type_id = CALL;
-                            let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg_action = "StatusNotification";
-                            let status_notification_msg_payload = "{\"timestamp\":\"2019-10-03T15:48:20+00:00\",\"connectorStatus\":\"Available\",\"evseId\":0,\"connectorId\":1}"; // TODO Unmock.
 
-                            let status_notification_msg = format!("[{}, \"{}\", \"{}\", {}]", status_notification_msg_type_id, status_notification_msg_id, status_notification_msg_action, status_notification_msg_payload);
+                            let status_notification_msg_id = Uuid::new_v4();
+                            let status_notification_msg = create_status_notification_request(status_notification_msg_id.to_string(), 0, 1, "Available");
+
+                            set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
                             self.out.send(status_notification_msg)?;
 
                             // Schedule a timeout to send Heartbeat once per day.
-                            self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock.
+                            self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock timeout.
                         }
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
@@ -216,15 +228,17 @@ impl Handler for Client {
         match event {
             HEARTBEAT => {
                 // Send Heartbeat message.
-                let msg_type_id = CALL;
-                let msg_id = Uuid::new_v4();
-                let msg_action = "Heartbeat";
-                let msg_payload = "{}";
 
-                self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))?;
+                let msg_id = Uuid::new_v4();
+                let msg = create_heartbeat_request(msg_id.to_string());
+
+                set_message(msg_id.to_string(), msg.to_owned());
+
+                self.out.send(msg)?;
 
                 // Schedule next message.
-                self.out.timeout(86000_000, HEARTBEAT)?;
+                self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock timeout.
+
                 Ok(())
             },
             // No other events are possible.
