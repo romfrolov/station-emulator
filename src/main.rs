@@ -158,24 +158,29 @@ impl Handler for Client {
                 println!("Parsed message from map: {:?}", parsed_msg_from_map);
 
                 let msg_from_map_action = &parsed_msg_from_map[2].to_string();
-                // let msg_from_map_payload = parsed_msg[3];
+                let msg_from_map_payload = &parsed_msg_from_map[3];
+
+                println!("Message from map payload: {:?}", msg_from_map_payload);
 
                 match msg_from_map_action.as_str() {
                     "BootNotification" => {
-                        // TODO Get status from payload.
+                        // Check status of the response.
+                        if payload["status"].to_string() == "Accepted" {
+                            println!("BootNotification was accepted.");
 
-                        // Send StatusNotification message.
-                        let status_notification_msg_type_id = CALL;
-                        let status_notification_msg_id = Uuid::new_v4();
-                        let status_notification_msg_action = "StatusNotification";
-                        let status_notification_msg_payload = "{\"timestamp\":\"2019-10-03T15:48:20+00:00\",\"connectorStatus\":\"Available\",\"evseId\":0,\"connectorId\":1}"; // TODO Unmock.
+                            // Send StatusNotification message.
+                            let status_notification_msg_type_id = CALL;
+                            let status_notification_msg_id = Uuid::new_v4();
+                            let status_notification_msg_action = "StatusNotification";
+                            let status_notification_msg_payload = "{\"timestamp\":\"2019-10-03T15:48:20+00:00\",\"connectorStatus\":\"Available\",\"evseId\":0,\"connectorId\":1}"; // TODO Unmock.
 
-                        let status_notification_msg = format!("[{}, \"{}\", \"{}\", {}]", status_notification_msg_type_id, status_notification_msg_id, status_notification_msg_action, status_notification_msg_payload);
+                            let status_notification_msg = format!("[{}, \"{}\", \"{}\", {}]", status_notification_msg_type_id, status_notification_msg_id, status_notification_msg_action, status_notification_msg_payload);
 
-                        self.out.send(status_notification_msg)?;
+                            self.out.send(status_notification_msg)?;
 
-                        // Schedule a timeout to send Heartbeat once per day.
-                        self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock.
+                            // Schedule a timeout to send Heartbeat once per day.
+                            self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock.
+                        }
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
                 }
