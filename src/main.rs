@@ -14,7 +14,8 @@ use url;
 use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
-use chrono::prelude::*;
+
+mod messages;
 
 macro_rules! block {
     ($xs:block) => {
@@ -58,37 +59,6 @@ struct Client {
     out: Sender,
 }
 
-fn create_boot_notification_request(msg_id: String, serial_number: String) -> String {
-    let action = "BootNotification";
-    let payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"{}\",\"vendorName\":\"{}\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number, MODEL, VENDOR_NAME);
-
-    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
-}
-
-fn create_status_notification_request(msg_id: String, evse_id: u8, connector_id: u8, status: &str) -> String {
-    let action = "StatusNotification";
-    let now = match Utc::now().with_nanosecond(0) {
-        Some(res) => res.to_rfc3339(),
-        None => panic!("Current date is empty."),
-    };
-    let payload = format!("{{\"timestamp\":\"{}\",\"connectorStatus\":\"{}\",\"evseId\":{},\"connectorId\":{}}}", now, status, evse_id, connector_id);
-
-    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
-}
-
-fn create_heartbeat_request(msg_id: String) -> String {
-    let action = "Heartbeat";
-    let payload = "{}";
-
-    format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
-}
-
-fn create_set_variables_response(msg_id: String) -> String {
-    let payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
-
-    format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
-}
-
 // We implement the Handler trait for Client so that we can get more
 // fine-grained control of the connection.
 impl Handler for Client {
@@ -109,7 +79,7 @@ impl Handler for Client {
         // Send BootNotification request.
 
         let msg_id = Uuid::new_v4();
-        let msg = create_boot_notification_request(msg_id.to_string(), serial_number);
+        let msg = messages::create_boot_notification_request(msg_id.to_string(), serial_number, MODEL, VENDOR_NAME);
 
         set_message(msg_id.to_string(), msg.to_owned());
 
@@ -145,7 +115,7 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        let response_msg = create_set_variables_response(msg_id);
+                        let response_msg = messages::create_set_variables_response(msg_id);
 
                         self.out.send(response_msg)?;
                     },
@@ -184,7 +154,7 @@ impl Handler for Client {
                             // Send StatusNotification message.
 
                             let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg = create_status_notification_request(status_notification_msg_id.to_string(), 0, 1, "Available");
+                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 0, 1, "Available");
 
                             set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
@@ -230,7 +200,7 @@ impl Handler for Client {
                 // Send Heartbeat message.
 
                 let msg_id = Uuid::new_v4();
-                let msg = create_heartbeat_request(msg_id.to_string());
+                let msg = messages::create_heartbeat_request(msg_id.to_string());
 
                 set_message(msg_id.to_string(), msg.to_owned());
 
