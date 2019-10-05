@@ -32,8 +32,27 @@ const CALLERROR: u8 = 4;
 const MODEL: &str = "Model";
 const VENDOR_NAME: &str = "Vendor name";
 
+#[derive(Debug)]
+struct Config {
+    csms_url: String,
+    station_id: String,
+    serial_number: String,
+}
+
+// Websocket Handler struct.
+struct Client {
+    out: Sender,
+}
+
+#[derive(Clone, Debug)]
+struct Connector {
+    status: String,
+    operational: bool,
+}
+
 lazy_static! {
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref EVSES: Mutex<[[Connector; 1]; 1]> = Mutex::new([[Connector { status: "Inoperative".to_string(), operational: true }]]);
 }
 
 static mut HEARTBEAT_INTERVAL: u64 = 0;
@@ -49,17 +68,17 @@ fn get_message(key: String) -> String {
     }
 }
 
-#[derive(Debug)]
-struct Config {
-    csms_url: String,
-    station_id: String,
-    serial_number: String,
+fn set_connector_status(evse_index: usize, connector_index: usize, value: String) {
+    EVSES.lock().unwrap()[evse_index][connector_index].status = value;
 }
-
-// Websocket Handler struct.
-struct Client {
-    out: Sender,
-}
+// NOTE Unused.
+// fn set_connector_operational(evse_index: usize, connector_index: usize, value: bool) {
+//     EVSES.lock().unwrap()[evse_index][connector_index].operational = value;
+// }
+// NOTE Unused.
+// fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
+//     EVSES.lock().unwrap()[evse_index][connector_index].clone()
+// }
 
 // We implement the Handler trait for Client so that we can get more
 // fine-grained control of the connection.
@@ -142,12 +161,9 @@ impl Handler for Client {
                     Err(e) => panic!("Error during parsing: {:?}", e),
                 };
 
-                println!("Parsed message from map: {:?}", parsed_msg_from_map);
-
                 let msg_from_map_action = &parsed_msg_from_map[2].to_string();
-                let msg_from_map_payload = &parsed_msg_from_map[3];
-
-                println!("Message from map payload: {:?}", msg_from_map_payload);
+                // NOTE Unused.
+                // let msg_from_map_payload = &parsed_msg_from_map[3];
 
                 match msg_from_map_action.as_str() {
                     "BootNotification" => {
@@ -157,20 +173,21 @@ impl Handler for Client {
 
                             // Send StatusNotification message.
 
+                            let connector_status = "Available";
                             let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, "Available");
+                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
 
                             set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
                             self.out.send(status_notification_msg)?;
+
+                            set_connector_status(0, 0, connector_status.to_string());
 
                             unsafe {
                                 match payload["interval"].as_number() {
                                     Some(res) => HEARTBEAT_INTERVAL = u64::from(res) * 1000,
                                     None => panic!("Parsed message has no value."),
                                 };
-
-                                println!("Heartbeat interval: {} sec", HEARTBEAT_INTERVAL / 1000);
 
                                 // Schedule a timeout to send Heartbeat once per day.
                                 self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
