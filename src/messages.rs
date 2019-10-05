@@ -30,8 +30,8 @@ pub fn create_heartbeat_request(msg_id: String) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
-pub fn create_set_variables_response(msg_id: String) -> String {
-    let payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
+pub fn create_set_variables_response(msg_id: String, attribute_value: String, component: String, variable: String) -> String {
+    let payload = format!("{{\"setVariableResult\":[{{\"attributeStatus\":\"{}\",\"component\":\"{}\",\"variable\":{{\"name\":\"{}\"}}}}]}}", attribute_value, component, variable);
 
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
 }

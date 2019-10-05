@@ -36,6 +36,8 @@ lazy_static! {
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
+static mut HEARTBEAT_INTERVAL: u64 = 0;
+
 fn set_message(key: String, value: String) {
     MESSAGES.lock().unwrap().insert(key, value);
 }
@@ -115,7 +117,9 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        let response_msg = messages::create_set_variables_response(msg_id);
+                        // TODO Enhance logic.
+                        let set_variable_data = &payload["setVariableData"][0];
+                        let response_msg = messages::create_set_variables_response(msg_id, set_variable_data["attributeValue"].to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
 
                         self.out.send(response_msg)?;
                     },
@@ -160,8 +164,17 @@ impl Handler for Client {
 
                             self.out.send(status_notification_msg)?;
 
-                            // Schedule a timeout to send Heartbeat once per day.
-                            self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock timeout.
+                            unsafe {
+                                match payload["interval"].as_number() {
+                                    Some(res) => HEARTBEAT_INTERVAL = u64::from(res) * 1000,
+                                    None => panic!("Parsed message has no value."),
+                                };
+
+                                println!("Heartbeat interval: {} sec", HEARTBEAT_INTERVAL / 1000);
+
+                                // Schedule a timeout to send Heartbeat once per day.
+                                self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
+                            }
                         }
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
@@ -207,7 +220,9 @@ impl Handler for Client {
                 self.out.send(msg)?;
 
                 // Schedule next message.
-                self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock timeout.
+                unsafe {
+                    self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
+                }
 
                 Ok(())
             },
