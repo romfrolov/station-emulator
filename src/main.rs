@@ -1,18 +1,21 @@
 #[macro_use]
-
 extern crate lazy_static;
 extern crate dotenv;
 extern crate mio_extras;
 extern crate time;
 extern crate json;
+extern crate chrono;
 
 use std::env;
 use std::collections::HashMap;
 use std::sync::Mutex;
+
 use url;
 use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
+
+mod messages;
 
 macro_rules! block {
     ($xs:block) => {
@@ -21,39 +24,13 @@ macro_rules! block {
 }
 
 const HEARTBEAT: Token = Token(1);
+// OCPP constants.
 const CALL: u8 = 2;
 const CALLRESULT: u8 = 3;
 const CALLERROR: u8 = 4;
-
-lazy_static! {
-    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-}
-
-fn set_message(key: String, value: String) {
-    MESSAGES.lock().unwrap().insert(key, value);
-}
-
-fn get_message(key: String) -> String {
-    match MESSAGES.lock().unwrap().get(&key) {
-        Some(value) => value.to_string(),
-        None => "".to_string()
-    }
-}
-
-trait StringUtils {
-    fn slice(&self, begin: usize, end: isize) -> Self;
-}
-
-impl StringUtils for String {
-    fn slice(&self, begin: usize, mut end: isize) -> Self {
-        if end < 0 {
-            end *= -1;
-            self[begin..self.chars().count() - end as usize].chars().collect()
-        } else {
-            self[begin..end as usize].chars().collect()
-        }
-    }
-}
+// Station constants.
+const MODEL: &str = "Model";
+const VENDOR_NAME: &str = "Vendor name";
 
 #[derive(Debug)]
 struct Config {
@@ -66,6 +43,42 @@ struct Config {
 struct Client {
     out: Sender,
 }
+
+#[derive(Clone, Debug)]
+struct Connector {
+    status: String,
+    operational: bool,
+}
+
+lazy_static! {
+    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref EVSES: Mutex<[[Connector; 1]; 1]> = Mutex::new([[Connector { status: "Inoperative".to_string(), operational: true }]]);
+}
+
+static mut HEARTBEAT_INTERVAL: u64 = 0;
+
+fn set_message(key: String, value: String) {
+    MESSAGES.lock().unwrap().insert(key, value);
+}
+
+fn get_message(key: String) -> String {
+    match MESSAGES.lock().unwrap().get(&key) {
+        Some(value) => value.to_string(),
+        None => "".to_string(),
+    }
+}
+
+fn set_connector_status(evse_index: usize, connector_index: usize, value: String) {
+    EVSES.lock().unwrap()[evse_index][connector_index].status = value;
+}
+// NOTE Unused.
+// fn set_connector_operational(evse_index: usize, connector_index: usize, value: bool) {
+//     EVSES.lock().unwrap()[evse_index][connector_index].operational = value;
+// }
+// NOTE Unused.
+// fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
+//     EVSES.lock().unwrap()[evse_index][connector_index].clone()
+// }
 
 // We implement the Handler trait for Client so that we can get more
 // fine-grained control of the connection.
@@ -86,12 +99,8 @@ impl Handler for Client {
 
         // Send BootNotification request.
 
-        let msg_type_id = CALL;
         let msg_id = Uuid::new_v4();
-        let msg_action = "BootNotification";
-        let msg_payload = format!("{{\"reason\":\"PowerUp\",\"chargingStation\":{{\"serialNumber\":\"{}\",\"model\":\"Model\",\"vendorName\":\"Vendor name\",\"firmwareVersion\":\"0.1.0\",\"modem\":{{\"iccid\":\"\",\"imsi\":\"\"}}}}}}", serial_number);
-
-        let msg = format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload);
+        let msg = messages::create_boot_notification_request(msg_id.to_string(), serial_number, MODEL, VENDOR_NAME);
 
         set_message(msg_id.to_string(), msg.to_owned());
 
@@ -108,7 +117,7 @@ impl Handler for Client {
 
         let msg_type_id = match parsed_msg[0].as_u8() {
             Some(res) => res,
-            None => panic!("Error during parsing"),
+            None => panic!("Parsed message has no value."),
         };
         let msg_id = parsed_msg[1].to_string();
 
@@ -127,10 +136,9 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        let response_msg_type_id = CALLRESULT;
-                        let response_msg_payload = "{\"setVariableResult\":[{\"attributeStatus\":\"Accepted\",\"component\":\"AuthCtrlr\",\"variable\":{\"name\":\"AuthorizeRemoteStart\"}}]}"; // TODO Unmock.
-
-                        let response_msg = format!("[{}, \"{}\", {}]", response_msg_type_id, msg_id, response_msg_payload);
+                        // TODO Enhance logic.
+                        let set_variable_data = &payload["setVariableData"][0];
+                        let response_msg = messages::create_set_variables_response(msg_id, set_variable_data["attributeValue"].to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
 
                         self.out.send(response_msg)?;
                     },
@@ -144,8 +152,6 @@ impl Handler for Client {
 
                 let msg_from_map = get_message(msg_id);
 
-                println!("Message from map: {:?}", msg_from_map);
-
                 if msg_from_map == "" {
                     break;
                 }
@@ -155,12 +161,9 @@ impl Handler for Client {
                     Err(e) => panic!("Error during parsing: {:?}", e),
                 };
 
-                println!("Parsed message from map: {:?}", parsed_msg_from_map);
-
                 let msg_from_map_action = &parsed_msg_from_map[2].to_string();
-                let msg_from_map_payload = &parsed_msg_from_map[3];
-
-                println!("Message from map payload: {:?}", msg_from_map_payload);
+                // NOTE Unused.
+                // let msg_from_map_payload = &parsed_msg_from_map[3];
 
                 match msg_from_map_action.as_str() {
                     "BootNotification" => {
@@ -169,17 +172,26 @@ impl Handler for Client {
                             println!("BootNotification was accepted.");
 
                             // Send StatusNotification message.
-                            let status_notification_msg_type_id = CALL;
-                            let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg_action = "StatusNotification";
-                            let status_notification_msg_payload = "{\"timestamp\":\"2019-10-03T15:48:20+00:00\",\"connectorStatus\":\"Available\",\"evseId\":0,\"connectorId\":1}"; // TODO Unmock.
 
-                            let status_notification_msg = format!("[{}, \"{}\", \"{}\", {}]", status_notification_msg_type_id, status_notification_msg_id, status_notification_msg_action, status_notification_msg_payload);
+                            let connector_status = "Available";
+                            let status_notification_msg_id = Uuid::new_v4();
+                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
+
+                            set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
                             self.out.send(status_notification_msg)?;
 
-                            // Schedule a timeout to send Heartbeat once per day.
-                            self.out.timeout(86000_000, HEARTBEAT)?; // TODO Unmock.
+                            set_connector_status(0, 0, connector_status.to_string());
+
+                            unsafe {
+                                match payload["interval"].as_number() {
+                                    Some(res) => HEARTBEAT_INTERVAL = u64::from(res) * 1000,
+                                    None => panic!("Parsed message has no value."),
+                                };
+
+                                // Schedule a timeout to send Heartbeat once per day.
+                                self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
+                            }
                         }
                     },
                     _=> println!("No response handler for action: {}", msg_from_map_action),
@@ -216,15 +228,19 @@ impl Handler for Client {
         match event {
             HEARTBEAT => {
                 // Send Heartbeat message.
-                let msg_type_id = CALL;
-                let msg_id = Uuid::new_v4();
-                let msg_action = "Heartbeat";
-                let msg_payload = "{}";
 
-                self.out.send(format!("[{}, \"{}\", \"{}\", {}]", msg_type_id, msg_id, msg_action, msg_payload))?;
+                let msg_id = Uuid::new_v4();
+                let msg = messages::create_heartbeat_request(msg_id.to_string());
+
+                set_message(msg_id.to_string(), msg.to_owned());
+
+                self.out.send(msg)?;
 
                 // Schedule next message.
-                self.out.timeout(86000_000, HEARTBEAT)?;
+                unsafe {
+                    self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
+                }
+
                 Ok(())
             },
             // No other events are possible.

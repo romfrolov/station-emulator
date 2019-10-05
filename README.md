@@ -7,13 +7,17 @@ Electric vehicle charging station emulator which supports OCPP 2.0.
 
 ### List of supported messages
 
-- [ ] - BootNotification
-- [ ] - SetVariables
-- [ ] - ChangeAvailability
-- [ ] - Heartbeat
-- [ ] - StatusNotification
+**boot**
+- [x] - BootNotification
+- [x] - Heartbeat
+- [x] - StatusNotification
+**transaction**
 - [ ] - TransactionEvent
 - [ ] - RequestStartTransaction (only remote authorization)
 - [ ] - RequestStopTransaction
+**settings**
+- [ ] - ChangeAvailability
+- [ ] - SetVariables
+**reservations**
 - [ ] - ReserveNow
 - [ ] - CancelReservation
