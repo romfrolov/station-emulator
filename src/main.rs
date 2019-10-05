@@ -158,7 +158,7 @@ impl Handler for Client {
                             // Send StatusNotification message.
 
                             let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 0, 1, "Available");
+                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, "Available");
 
                             set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
