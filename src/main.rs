@@ -142,6 +142,8 @@ impl Handler for Client {
 
                         self.out.send(response_msg)?;
                     },
+                    // TODO RequestStartTransaction handler.
+                    // TODO RequestStopTransaction handler.
                     _ => println!("No request handler for action: {}", action),
                 }
             },
