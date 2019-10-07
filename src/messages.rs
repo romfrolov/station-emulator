@@ -106,7 +106,7 @@ pub fn create_request_start_transaction_response(msg_id: String, remote_start_id
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, stringify(payload))
 }
 
-pub fn create_request_stop_transaction_response(msg_id: String, status: &str) -> String {
+pub fn create_request_stop_transaction_response(msg_id: String, status: String) -> String {
     let payload = object!{
         "status" => status,
     };
