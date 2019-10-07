@@ -11,10 +11,10 @@ Electric vehicle charging station emulator which supports OCPP 2.0.
   - [x] - BootNotification
   - [x] - Heartbeat
   - [x] - StatusNotification
-- [ ] transaction
-  - [ ] - TransactionEvent
-  - [ ] - RequestStartTransaction (only remote authorization)
-  - [ ] - RequestStopTransaction
+- [x] transaction
+  - [x] - TransactionEvent
+  - [x] - RequestStartTransaction (only remote authorization)
+  - [x] - RequestStopTransaction
 - [ ] settings
   - [ ] - ChangeAvailability
   - [ ] - SetVariables
