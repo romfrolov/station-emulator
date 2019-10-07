@@ -3,6 +3,7 @@ extern crate lazy_static;
 extern crate dotenv;
 extern crate mio_extras;
 extern crate time;
+#[macro_use]
 extern crate json;
 extern crate chrono;
 
@@ -138,7 +139,7 @@ impl Handler for Client {
 
                         // TODO Enhance logic.
                         let set_variable_data = &payload["setVariableData"][0];
-                        let response_msg = messages::create_set_variables_response(msg_id, set_variable_data["attributeValue"].to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
+                        let response_msg = messages::create_set_variables_response(msg_id, "Accepted".to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
 
                         self.out.send(response_msg)?;
                     },
