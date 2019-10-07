@@ -142,8 +142,23 @@ impl Handler for Client {
 
                         self.out.send(response_msg)?;
                     },
-                    // TODO RequestStartTransaction handler.
-                    // TODO RequestStopTransaction handler.
+                    "RequestStartTransaction" => {
+                        // TODO Send RequestStartTransaction response.
+                        // TODO Send StatusNotification with status "Occupied".
+                        // TODO Set EVSE status to "Occupied".
+                        // TODO Send TransactionEvent "Started" request.
+                        // TODO Save transaction.
+                        // TODO Send TransactionEvent "Updated" request.
+                    },
+                    "RequestStopTransaction" => {
+                        // TODO Send RequestStopTransaction response.
+                        // TODO Send TransactionEvent "Updated" request.
+                        // TODO Send TransactionEvent "Ended" request.
+                        // TODO Get transaction.
+                        // TODO Delete transaction.
+                        // TODO Send StatusNotification with status "Available".
+                        // TODO Set EVSE status to "Available".
+                    },
                     _ => println!("No request handler for action: {}", action),
                 }
             },

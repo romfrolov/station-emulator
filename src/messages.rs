@@ -30,8 +30,20 @@ pub fn create_heartbeat_request(msg_id: String) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
+pub fn create_transaction_event_request() {
+    // TODO
+}
+
 pub fn create_set_variables_response(msg_id: String, attribute_value: String, component: String, variable: String) -> String {
     let payload = format!("{{\"setVariableResult\":[{{\"attributeStatus\":\"{}\",\"component\":\"{}\",\"variable\":{{\"name\":\"{}\"}}}}]}}", attribute_value, component, variable);
 
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
+}
+
+pub fn create_request_start_transaction_response() {
+    // TODO
+}
+
+pub fn create_request_stop_transaction_response() {
+    // TODO
 }
