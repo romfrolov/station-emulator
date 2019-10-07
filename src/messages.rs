@@ -47,22 +47,35 @@ pub fn create_heartbeat_request(msg_id: String) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
-pub fn create_transaction_event_request(msg_id: String, remote_start_id: u64, transaction_id: String, event_type: &str, trigger_reason: &str, charging_state: Option<&str>, stopped_reason: Option<&str>) -> String {
+pub fn create_transaction_event_request(msg_id: String, transaction_id: String, event_type: String, trigger_reason: String, charging_state: Option<String>, remote_start_id: Option<u64>, stopped_reason: Option<String>) -> String {
     let action = "TransactionEvent";
     let now = match Utc::now().with_nanosecond(0) {
         Some(res) => res.to_rfc3339(),
         None => panic!("Current date is empty."),
     };
-    let payload = object!{
+    let mut payload = object!{
         "eventType" => event_type,
         "timestamp" => now,
         "triggerReason" => trigger_reason,
         "seqNo" => 0,
         "transactionData" => object!{
             "id" => transaction_id,
-            "chargingState" => charging_state,
-            "stoppedReason" => stopped_reason,
         },
+    };
+
+    match charging_state {
+        Some(data) => payload["transactionData"]["chargingState"] = data.into(),
+        _ => (),
+    };
+
+    match remote_start_id {
+        Some(data) => payload["transactionData"]["remoteStartId"] = data.into(),
+        _ => (),
+    };
+
+    match stopped_reason {
+        Some(data) => payload["transactionData"]["stoppedReason"] = data.into(),
+        _ => (),
     };
 
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, stringify(payload))
@@ -84,7 +97,7 @@ pub fn create_set_variables_response(msg_id: String, attribute_status: String, c
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, stringify(payload))
 }
 
-pub fn create_request_start_transaction_response(msg_id: String, remote_start_id: u64, status: &str) -> String {
+pub fn create_request_start_transaction_response(msg_id: String, remote_start_id: u64, status: String) -> String {
     let payload = object!{
         "remoteStartId" => remote_start_id,
         "status" => status,

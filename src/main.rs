@@ -52,8 +52,9 @@ struct Connector {
 }
 
 lazy_static! {
-    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref EVSES: Mutex<[[Connector; 1]; 1]> = Mutex::new([[Connector { status: "Inoperative".to_string(), operational: true }]]);
+    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref TRANSACTIONS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
 static mut HEARTBEAT_INTERVAL: u64 = 0;
@@ -64,6 +65,17 @@ fn set_message(key: String, value: String) {
 
 fn get_message(key: String) -> String {
     match MESSAGES.lock().unwrap().get(&key) {
+        Some(value) => value.to_string(),
+        None => "".to_string(),
+    }
+}
+
+fn set_transaction(key: String, value: String) {
+    TRANSACTIONS.lock().unwrap().insert(key, value);
+}
+
+fn get_transaction(key: String) -> String {
+    match TRANSACTIONS.lock().unwrap().get(&key) {
         Some(value) => value.to_string(),
         None => "".to_string(),
     }
@@ -144,12 +156,47 @@ impl Handler for Client {
                         self.out.send(response_msg)?;
                     },
                     "RequestStartTransaction" => {
-                        // TODO Send RequestStartTransaction response.
-                        // TODO Send StatusNotification with status "Occupied".
-                        // TODO Set EVSE status to "Occupied".
-                        // TODO Send TransactionEvent "Started" request.
-                        // TODO Save transaction.
-                        // TODO Send TransactionEvent "Updated" request.
+                        let remote_start_id: u64 = match payload["remoteStartId"].as_number() {
+                            Some(res) => u64::from(res),
+                            None => panic!("Parsed message has no value."),
+                        };
+
+                        // Send RequestStartTransaction response.
+                        messages::create_request_start_transaction_response(msg_id, remote_start_id, "Accepted".to_string());
+
+                        // Set EVSE status to "Occupied" and send StatusNotification with updated status.
+
+                        let connector_status = "Occupied";
+                        let status_notification_msg_id = Uuid::new_v4();
+                        let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
+
+                        set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
+
+                        self.out.send(status_notification_msg)?;
+
+                        set_connector_status(0, 0, connector_status.to_string());
+
+                        // Send "Started" TransactionEvent request to notify CSMS about the started transaction.
+
+                        let mut transaction_event_msg_id = Uuid::new_v4();
+                        let mut transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Started".to_string(), "RemoteStart".to_string(), None, Some(remote_start_id), None);
+
+                        set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
+
+                        self.out.send(transaction_event_msg)?;
+
+                        // Save as map: transaction id => message payload.
+
+                        set_transaction(transaction_event_msg_id.to_string(), payload.dump());
+
+                        // Send "Updated" TransactionEvent request to notify CSMS about the plugged in cable.
+
+                        transaction_event_msg_id = Uuid::new_v4();
+                        transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Updated".to_string(), "CablePluggedIn".to_string(), Some("Charging".to_string()), None, None);
+
+                        set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
+
+                        self.out.send(transaction_event_msg)?;
                     },
                     "RequestStopTransaction" => {
                         // TODO Send RequestStopTransaction response.
@@ -189,7 +236,7 @@ impl Handler for Client {
                         if payload["status"].to_string() == "Accepted" {
                             println!("BootNotification was accepted.");
 
-                            // Send StatusNotification message.
+                            // Set EVSE status to "Available" and send StatusNotification with updated status.
 
                             let connector_status = "Available";
                             let status_notification_msg_id = Uuid::new_v4();
@@ -201,13 +248,14 @@ impl Handler for Client {
 
                             set_connector_status(0, 0, connector_status.to_string());
 
+                            // Schedule a Heartbeat using the interval from BootNotification.
+
                             unsafe {
                                 match payload["interval"].as_number() {
                                     Some(res) => HEARTBEAT_INTERVAL = u64::from(res) * 1000,
                                     None => panic!("Parsed message has no value."),
                                 };
 
-                                // Schedule a timeout to send Heartbeat once per day.
                                 self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
                             }
                         }

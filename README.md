@@ -21,3 +21,7 @@ Electric vehicle charging station emulator which supports OCPP 2.0.
 - [ ] reservations
   - [ ] - ReserveNow
   - [ ] - CancelReservation
+
+### Known issues
+
+1. Message synchronicity.
