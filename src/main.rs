@@ -16,7 +16,8 @@ use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
 
-mod messages;
+mod requests;
+mod responses;
 
 macro_rules! block {
     ($xs:block) => {
@@ -119,7 +120,7 @@ impl Handler for Client {
         // Send BootNotification request.
 
         let msg_id = Uuid::new_v4();
-        let msg = messages::create_boot_notification_request(msg_id.to_string(), serial_number, MODEL, VENDOR_NAME);
+        let msg = requests::boot_notification(msg_id.to_string(), serial_number, MODEL, VENDOR_NAME);
 
         set_message(msg_id.to_string(), msg.to_owned());
 
@@ -157,7 +158,7 @@ impl Handler for Client {
 
                         // TODO Enhance logic.
                         let set_variable_data = &payload["setVariableData"][0];
-                        let response_msg = messages::create_set_variables_response(msg_id, "Accepted".to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
+                        let response_msg = responses::set_variables(msg_id, "Accepted".to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
 
                         self.out.send(response_msg)?;
                     },
@@ -187,7 +188,7 @@ impl Handler for Client {
 
                         // Send RequestStartTransaction response.
 
-                        let request_start_transaction_msg = messages::create_request_start_transaction_response(msg_id, remote_start_id, response_status.to_string());
+                        let request_start_transaction_msg = responses::request_start_transaction(msg_id, remote_start_id, response_status.to_string());
 
                         self.out.send(request_start_transaction_msg)?;
 
@@ -199,7 +200,7 @@ impl Handler for Client {
 
                         let connector_status = "Occupied";
                         let status_notification_msg_id = Uuid::new_v4();
-                        let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
+                        let status_notification_msg = requests::status_notification(status_notification_msg_id.to_string(), 1, 1, connector_status);
 
                         set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
@@ -210,7 +211,7 @@ impl Handler for Client {
                         // Send "Started" TransactionEvent request to notify CSMS about the started transaction.
 
                         let mut transaction_event_msg_id = Uuid::new_v4();
-                        let mut transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), transaction_id.to_string(), "Started".to_string(), "RemoteStart".to_string(), None, Some(remote_start_id), None);
+                        let mut transaction_event_msg = requests::transaction_event(transaction_event_msg_id.to_string(), transaction_id.to_string(), "Started".to_string(), "RemoteStart".to_string(), None, Some(remote_start_id), None);
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
@@ -222,7 +223,7 @@ impl Handler for Client {
                         // Send "Updated" TransactionEvent request to notify CSMS about the plugged in cable.
 
                         transaction_event_msg_id = Uuid::new_v4();
-                        transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), transaction_id.to_string(), "Updated".to_string(), "CablePluggedIn".to_string(), Some("Charging".to_string()), None, None);
+                        transaction_event_msg = requests::transaction_event(transaction_event_msg_id.to_string(), transaction_id.to_string(), "Updated".to_string(), "CablePluggedIn".to_string(), Some("Charging".to_string()), None, None);
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
@@ -239,7 +240,7 @@ impl Handler for Client {
 
                         // Send RequestStopTransaction response.
 
-                        let request_stop_transaction_msg = messages::create_request_stop_transaction_response(msg_id, response_status.to_string());
+                        let request_stop_transaction_msg = responses::request_stop_transaction(msg_id, response_status.to_string());
 
                         self.out.send(request_stop_transaction_msg)?;
 
@@ -250,7 +251,7 @@ impl Handler for Client {
                         // Send "Updated" TransactionEvent request to notify CSMS about remote stop command.
 
                         let mut transaction_event_msg_id = Uuid::new_v4();
-                        let mut transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Updated".to_string(), "RemoteStop".to_string(), None, None, None);
+                        let mut transaction_event_msg = requests::transaction_event(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Updated".to_string(), "RemoteStop".to_string(), None, None, None);
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
@@ -259,7 +260,7 @@ impl Handler for Client {
                         // Send "Ended" TransactionEvent request.
 
                         transaction_event_msg_id = Uuid::new_v4();
-                        transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Ended".to_string(), "RemoteStop".to_string(), None, None, Some("Remote".to_string()));
+                        transaction_event_msg = requests::transaction_event(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Ended".to_string(), "RemoteStop".to_string(), None, None, Some("Remote".to_string()));
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
@@ -272,7 +273,7 @@ impl Handler for Client {
 
                         let connector_status = "Available";
                         let status_notification_msg_id = Uuid::new_v4();
-                        let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
+                        let status_notification_msg = requests::status_notification(status_notification_msg_id.to_string(), 1, 1, connector_status);
 
                         set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
@@ -313,7 +314,7 @@ impl Handler for Client {
 
                             let connector_status = "Available";
                             let status_notification_msg_id = Uuid::new_v4();
-                            let status_notification_msg = messages::create_status_notification_request(status_notification_msg_id.to_string(), 1, 1, connector_status);
+                            let status_notification_msg = requests::status_notification(status_notification_msg_id.to_string(), 1, 1, connector_status);
 
                             set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
@@ -369,7 +370,7 @@ impl Handler for Client {
                 // Send Heartbeat message.
 
                 let msg_id = Uuid::new_v4();
-                let msg = messages::create_heartbeat_request(msg_id.to_string());
+                let msg = requests::heartbeat(msg_id.to_string());
 
                 set_message(msg_id.to_string(), msg.to_owned());
 
