@@ -94,10 +94,10 @@ fn set_connector_status(evse_index: usize, connector_index: usize, value: String
 // fn set_connector_operational(evse_index: usize, connector_index: usize, value: bool) {
 //     EVSES.lock().unwrap()[evse_index][connector_index].operational = value;
 // }
-// NOTE Unused.
-// fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
-//     EVSES.lock().unwrap()[evse_index][connector_index].clone()
-// }
+
+fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
+    EVSES.lock().unwrap()[evse_index][connector_index].clone()
+}
 
 // We implement the Handler trait for Client so that we can get more
 // fine-grained control of the connection.
@@ -170,11 +170,30 @@ impl Handler for Client {
                         // Generate transaction id.
                         let transaction_id = Uuid::new_v4();
 
+                        // Check connector status.
+                        let evse_id = match payload["evseId"].as_number() {
+                            Some(res) => usize::from(res),
+                            _ => panic!("Parsed EVSE ID has no value."),
+                        };
+
+                        // FIXME Magic number (connector index).
+                        let connector = get_connector(evse_id - 1, 0);
+
+                        let mut response_status = "Accepted";
+
+                        if connector.status != "Available" {
+                            response_status = "Rejected";
+                        }
+
                         // Send RequestStartTransaction response.
 
-                        let request_start_transaction_msg = messages::create_request_start_transaction_response(msg_id, remote_start_id, "Accepted".to_string());
+                        let request_start_transaction_msg = messages::create_request_start_transaction_response(msg_id, remote_start_id, response_status.to_string());
 
                         self.out.send(request_start_transaction_msg)?;
+
+                        if response_status == "Rejected" {
+                            break;
+                        }
 
                         // Set EVSE status to "Occupied" and send StatusNotification with updated status.
 
@@ -203,7 +222,7 @@ impl Handler for Client {
                         // Send "Updated" TransactionEvent request to notify CSMS about the plugged in cable.
 
                         transaction_event_msg_id = Uuid::new_v4();
-                        transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), payload["transactionId"].to_string(), "Updated".to_string(), "CablePluggedIn".to_string(), Some("Charging".to_string()), None, None);
+                        transaction_event_msg = messages::create_transaction_event_request(transaction_event_msg_id.to_string(), transaction_id.to_string(), "Updated".to_string(), "CablePluggedIn".to_string(), Some("Charging".to_string()), None, None);
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
