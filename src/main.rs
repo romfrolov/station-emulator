@@ -75,13 +75,13 @@ fn get_message(key: String) -> String {
 fn set_transaction(key: String, value: String) {
     TRANSACTIONS.lock().unwrap().insert(key, value);
 }
-// NOTE Unused.
-// fn get_transaction(key: String) -> String {
-//     match TRANSACTIONS.lock().unwrap().get(&key) {
-//         Some(value) => value.to_string(),
-//         None => "".to_string(),
-//     }
-// }
+
+fn get_transaction(key: String) -> String {
+    match TRANSACTIONS.lock().unwrap().get(&key) {
+        Some(value) => value.to_string(),
+        None => "".to_string(),
+    }
+}
 
 fn delete_transaction(key: String) {
     TRANSACTIONS.lock().unwrap().remove(&key);
@@ -144,7 +144,7 @@ impl Handler for Client {
         println!("Message ID: {}", msg_id);
 
         match msg_type_id {
-            CALL => {
+            CALL => block!({
                 let action = &parsed_msg[2].to_string();
                 let payload = &parsed_msg[3];
 
@@ -210,11 +210,23 @@ impl Handler for Client {
                         self.out.send(transaction_event_msg)?;
                     },
                     "RequestStopTransaction" => {
+                        // Get transaction from hash map.
+                        let transaction = get_transaction(payload["transactionId"].to_string());
+
+                        let response_status = match transaction.as_str() {
+                            "" => "Rejected".to_string(),
+                            _ => "Accepted".to_string(),
+                        };
+
                         // Send RequestStopTransaction response.
 
-                        let request_stop_transaction_msg = messages::create_request_stop_transaction_response(msg_id, "Accepted".to_string());
+                        let request_stop_transaction_msg = messages::create_request_stop_transaction_response(msg_id, response_status.to_string());
 
                         self.out.send(request_stop_transaction_msg)?;
+
+                        if response_status == "Rejected" {
+                            break;
+                        }
 
                         // Send "Updated" TransactionEvent request to notify CSMS about remote stop command.
 
@@ -234,10 +246,6 @@ impl Handler for Client {
 
                         self.out.send(transaction_event_msg)?;
 
-                        // Get transaction from hash map.
-                        // NOTE Unused. Might be used in the future to retrieve EVSE id (e.g. for StatusNotification).
-                        // let transaction = get_transaction(payload["transactionId"].to_string());
-
                         // Delete transaction.
                         delete_transaction(payload["transactionId"].to_string());
 
@@ -255,7 +263,7 @@ impl Handler for Client {
                     },
                     _ => println!("No request handler for action: {}", action),
                 }
-            },
+            }),
             CALLRESULT => block!({
                 let payload = &parsed_msg[2];
 
@@ -310,9 +318,9 @@ impl Handler for Client {
                 }
             }),
             CALLERROR => {
-                let error_code = &parsed_msg[2];
-                let error_description = &parsed_msg[3];
-                let error_details = &parsed_msg[4];
+                let error_code = parsed_msg[2].to_string();
+                let error_description = parsed_msg[3].to_string();
+                let error_details = parsed_msg[4].to_string();
 
                 println!("CALLERROR Error code: {}", error_code);
                 println!("CALLERROR Error Description: {}", error_description);
