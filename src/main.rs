@@ -17,6 +17,7 @@ use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
 use queues::*;
+use chrono::prelude::*;
 
 mod requests;
 mod responses;
@@ -27,6 +28,7 @@ macro_rules! block {
     };
 }
 
+// Timeout events.
 const HEARTBEAT: Token = Token(1);
 const QUEUE_FETCH: Token = Token(2);
 // OCPP constants.
@@ -36,9 +38,11 @@ const CALLERROR: u8 = 4;
 // Station constants.
 const MODEL: &str = "Model";
 const VENDOR_NAME: &str = "Vendor name";
-
+// Message queue constants.
 const QUEUE_FETCH_INTERVAL: u64 = 50;
+const QUEUE_MESSAGE_EXPIRATION: u64 = 10;
 
+// Station configuration struct.
 #[derive(Debug)]
 struct Config {
     csms_url: String,
@@ -51,10 +55,18 @@ struct Client {
     out: Sender,
 }
 
+// Connector struct.
 #[derive(Clone, Debug)]
 struct Connector {
     status: String,
     operational: bool,
+}
+
+// Basic information about sent message.
+#[derive(Clone, Debug)]
+struct SentMessage {
+    id: Option<String>,
+    timestamp: Option<u64>,
 }
 
 lazy_static! {
@@ -65,6 +77,8 @@ lazy_static! {
     static ref TRANSACTIONS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     // Pending messages queue.
     static ref Q: Mutex<Queue<String>> = Mutex::new(queue![]);
+    // Last sent message.
+    static ref LAST_SENT_MESSAGE: Mutex<SentMessage> = Mutex::new(SentMessage { id: None, timestamp: None });
 }
 
 static mut HEARTBEAT_INTERVAL: u64 = 0;
@@ -123,6 +137,15 @@ fn queue_pop() -> String {
         Ok(res) => res,
         Err(_) => "".to_string(),
     }
+}
+
+fn set_last_sent_message(id: String, timestamp: u64) {
+    LAST_SENT_MESSAGE.lock().unwrap().id = Some(id);
+    LAST_SENT_MESSAGE.lock().unwrap().timestamp = Some(timestamp);
+}
+
+fn get_last_sent_message() -> SentMessage {
+    LAST_SENT_MESSAGE.lock().unwrap().clone()
 }
 
 // We implement the Handler trait for Client so that we can get more
@@ -414,13 +437,33 @@ impl Handler for Client {
                 Ok(())
             },
             QUEUE_FETCH => {
-                if queue_size() > 0 {
+                let current_timestamp: u64 = Utc::now().timestamp() as u64;
+
+                let last_sent_msg = get_last_sent_message();
+                // Check whether last sent message exists or not.
+                let last_sent_msg_exist: bool = last_sent_msg.id != None;
+                // Check whether last sent message has expired or not.
+                let last_sent_msg_expired: bool = match last_sent_msg.timestamp {
+                    Some(timestamp) => timestamp + QUEUE_MESSAGE_EXPIRATION < current_timestamp,
+                    None => true,
+                };
+
+                if queue_size() > 0 && (!last_sent_msg_exist || last_sent_msg_expired) {
                     let msg = queue_pop();
 
                     if msg != "" {
+                        let parsed_msg = match json::parse(&msg.to_owned()) {
+                            Ok(result) => result,
+                            Err(e) => panic!("Error during parsing: {:?}", e),
+                        };
+
+                        let msg_id = &parsed_msg[1].to_string();
+
                         self.out.send(msg)?;
 
                         println!("Message was sent.");
+
+                        set_last_sent_message(msg_id.to_string(), current_timestamp);
                     }
                 }
 
