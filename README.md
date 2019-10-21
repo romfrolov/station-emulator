@@ -45,10 +45,6 @@ After that the station emulator should start and send a `BootNotification` messa
   - [ ] - ReserveNow
   - [ ] - CancelReservation
 
-### Known issues
-
-1. Message synchronicity.
-
 ### Wishlist
 
 1. Extend station configuration (including vendor name, model, connectors).
