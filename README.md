@@ -1,7 +1,7 @@
 ## Station emulator
 *Work in progress*
 
-![](https://github.com/romfrolov/station-emulator/workflows/Rust/badge.svg)
+![](https://github.com/romfrolov/station-emulator/workflows/build/badge.svg)
 
 Electric vehicle charging station emulator which supports OCPP 2.0.
 
