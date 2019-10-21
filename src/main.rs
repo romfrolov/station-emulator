@@ -6,6 +6,7 @@ extern crate time;
 #[macro_use]
 extern crate json;
 extern crate chrono;
+extern crate queues;
 
 use std::env;
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ use url;
 use ws::util::Token;
 use ws::{connect, Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
+use queues::*;
 
 mod requests;
 mod responses;
@@ -26,6 +28,7 @@ macro_rules! block {
 }
 
 const HEARTBEAT: Token = Token(1);
+const QUEUE_FETCH: Token = Token(2);
 // OCPP constants.
 const CALL: u8 = 2;
 const CALLRESULT: u8 = 3;
@@ -33,6 +36,8 @@ const CALLERROR: u8 = 4;
 // Station constants.
 const MODEL: &str = "Model";
 const VENDOR_NAME: &str = "Vendor name";
+
+const QUEUE_FETCH_INTERVAL: u64 = 50;
 
 #[derive(Debug)]
 struct Config {
@@ -58,6 +63,8 @@ lazy_static! {
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     // Saved transactions. transaction id => stringified transaction.
     static ref TRANSACTIONS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    // Pending messages queue.
+    static ref Q: Mutex<Queue<String>> = Mutex::new(queue![]);
 }
 
 static mut HEARTBEAT_INTERVAL: u64 = 0;
@@ -92,12 +99,30 @@ fn set_connector_status(evse_index: usize, connector_index: usize, value: String
     EVSES.lock().unwrap()[evse_index][connector_index].status = value;
 }
 // NOTE Unused.
-// fn set_connector_operational(evse_index: usize, connector_index: usize, value: bool) {
+// fn set_connector_operational_status(evse_index: usize, connector_index: usize, value: bool) {
 //     EVSES.lock().unwrap()[evse_index][connector_index].operational = value;
 // }
 
 fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
     EVSES.lock().unwrap()[evse_index][connector_index].clone()
+}
+
+fn queue_size() -> usize {
+    Q.lock().unwrap().size()
+}
+
+fn queue_add(s: String) {
+    match Q.lock().unwrap().add(s) {
+        Err(e) => println!("{:?}", e),
+        _ => (),
+    };
+}
+
+fn queue_pop() -> String {
+    match Q.lock().unwrap().remove() {
+        Ok(res) => res,
+        Err(_) => "".to_string(),
+    }
 }
 
 // We implement the Handler trait for Client so that we can get more
@@ -111,6 +136,9 @@ impl Handler for Client {
     }
 
     fn on_open(&mut self, _: Handshake) -> Result<()> {
+        // Start queue worker.
+        self.out.timeout(QUEUE_FETCH_INTERVAL, QUEUE_FETCH)?;
+
         // Get serial number from environment.
         let serial_number = match env::var("SERIAL_NUMBER") {
             Ok(var) => var,
@@ -124,7 +152,9 @@ impl Handler for Client {
 
         set_message(msg_id.to_string(), msg.to_owned());
 
-        self.out.send(msg)
+        queue_add(msg);
+
+        Ok(())
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
@@ -204,7 +234,7 @@ impl Handler for Client {
 
                         set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                        self.out.send(status_notification_msg)?;
+                        queue_add(status_notification_msg);
 
                         set_connector_status(0, 0, connector_status.to_string());
 
@@ -215,7 +245,7 @@ impl Handler for Client {
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
-                        self.out.send(transaction_event_msg)?;
+                        queue_add(transaction_event_msg);
 
                         // Save transaction.
                         set_transaction(transaction_id.to_string(), payload.dump());
@@ -227,7 +257,7 @@ impl Handler for Client {
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
-                        self.out.send(transaction_event_msg)?;
+                        queue_add(transaction_event_msg);
                     },
                     "RequestStopTransaction" => {
                         // Get transaction from hash map.
@@ -255,7 +285,7 @@ impl Handler for Client {
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
-                        self.out.send(transaction_event_msg)?;
+                        queue_add(transaction_event_msg);
 
                         // Send "Ended" TransactionEvent request.
 
@@ -264,7 +294,7 @@ impl Handler for Client {
 
                         set_message(transaction_event_msg_id.to_string(), transaction_event_msg.to_owned());
 
-                        self.out.send(transaction_event_msg)?;
+                        queue_add(transaction_event_msg);
 
                         // Delete transaction.
                         delete_transaction(payload["transactionId"].to_string());
@@ -277,7 +307,7 @@ impl Handler for Client {
 
                         set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                        self.out.send(status_notification_msg)?;
+                        queue_add(status_notification_msg);
 
                         set_connector_status(0, 0, connector_status.to_string());
                     },
@@ -318,7 +348,7 @@ impl Handler for Client {
 
                             set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                            self.out.send(status_notification_msg)?;
+                            queue_add(status_notification_msg);
 
                             set_connector_status(0, 0, connector_status.to_string());
 
@@ -374,12 +404,27 @@ impl Handler for Client {
 
                 set_message(msg_id.to_string(), msg.to_owned());
 
-                self.out.send(msg)?;
+                queue_add(msg);
 
                 // Schedule next message.
                 unsafe {
                     self.out.timeout(HEARTBEAT_INTERVAL, HEARTBEAT)?;
                 }
+
+                Ok(())
+            },
+            QUEUE_FETCH => {
+                if queue_size() > 0 {
+                    let msg = queue_pop();
+
+                    if msg != "" {
+                        self.out.send(msg)?;
+
+                        println!("Message was sent.");
+                    }
+                }
+
+                self.out.timeout(QUEUE_FETCH_INTERVAL, QUEUE_FETCH)?;
 
                 Ok(())
             },
