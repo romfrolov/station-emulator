@@ -39,8 +39,9 @@ After that the station emulator should start and send a `BootNotification` messa
   - [x] - RequestStartTransaction (only remote authorization)
   - [x] - RequestStopTransaction
 - [ ] settings
+  - [x] - SetVariables
+  - [x] - GetVariables
   - [ ] - ChangeAvailability
-  - [ ] - SetVariables
 - [ ] reservations
   - [ ] - ReserveNow
   - [ ] - CancelReservation

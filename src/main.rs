@@ -181,8 +181,6 @@ impl Handler for Client {
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        println!("Raw message: {}", msg);
-
         let parsed_msg = match json::parse(msg.as_text()?) {
             Ok(result) => result,
             Err(e) => panic!("Error during parsing: {:?}", e),
@@ -194,7 +192,6 @@ impl Handler for Client {
         };
         let msg_id = parsed_msg[1].to_string();
 
-        println!("Message type ID: {}", msg_type_id);
         println!("Message ID: {}", msg_id);
 
         match msg_type_id {
@@ -209,12 +206,37 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        // TODO Enhance logic.
                         let set_variable_data = &payload["setVariableData"][0];
-                        let response_msg = responses::set_variables(msg_id, "Accepted".to_string(), set_variable_data["component"].to_string(), set_variable_data["variable"]["name"].to_string());
+                        let component = set_variable_data["component"].to_string();
+                        let variable_name = set_variable_data["variable"]["name"].to_string();
+
+                        let response_msg = match component == "AuthCtrlr" {
+                            true => match variable_name == "AuthorizeRemoteStart" {
+                                true => responses::set_variables(msg_id, "Rejected".to_string(), component, variable_name),
+                                false => responses::set_variables(msg_id, "UnknownVariable".to_string(), component, variable_name),
+                            },
+                            false => responses::set_variables(msg_id, "UnknownComponent".to_string(), component, variable_name),
+                        };
 
                         self.out.send(response_msg)?;
                     },
+                    "GetVariables" => {
+                        // Send GetVariables response.
+
+                        let set_variable_data = &payload["setVariableData"][0];
+                        let component = set_variable_data["component"].to_string();
+                        let variable_name = set_variable_data["variable"]["name"].to_string();
+
+                        let response_msg = match component == "AuthCtrlr" {
+                            true => match variable_name == "AuthorizeRemoteStart" {
+                                true => responses::get_variables(msg_id, "Accepted".to_string(), component, variable_name, Some("false".to_string())),
+                                false => responses::get_variables(msg_id, "UnknownVariable".to_string(), component, variable_name, None),
+                            },
+                            false => responses::get_variables(msg_id, "UnknownComponent".to_string(), component, variable_name, None),
+                        };
+
+                        self.out.send(response_msg)?;
+                    }
                     "RequestStartTransaction" => {
                         let remote_start_id: u64 = match payload["remoteStartId"].as_number() {
                             Some(res) => u64::from(res),
@@ -340,8 +362,6 @@ impl Handler for Client {
             CALLRESULT => block!({
                 let payload = &parsed_msg[2];
 
-                println!("CALLRESULT Payload: {}", payload);
-
                 let msg_from_map = get_message(msg_id);
 
                 if msg_from_map == "" {
@@ -458,10 +478,11 @@ impl Handler for Client {
                         };
 
                         let msg_id = &parsed_msg[1].to_string();
+                        let msg_action = &parsed_msg[2].to_string();
 
                         self.out.send(msg)?;
 
-                        println!("Message was sent.");
+                        println!("{} ({}) was sent.", msg_action, msg_id);
 
                         set_last_sent_message(msg_id.to_string(), current_timestamp);
                     }

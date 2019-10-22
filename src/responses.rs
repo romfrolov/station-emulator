@@ -7,6 +7,7 @@ fn wrap_call_result(msg_id: String, payload: String) -> String {
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
 }
 
+// TODO Support of array of variables.
 pub fn set_variables(msg_id: String, attribute_status: String, component: String, variable: String) -> String {
     let payload = object!{
         "setVariableResult" => array![
@@ -18,6 +19,28 @@ pub fn set_variables(msg_id: String, attribute_status: String, component: String
                 },
             }
         ],
+    };
+
+    wrap_call_result(msg_id, stringify(payload))
+}
+
+// TODO Support of array of variables.
+pub fn get_variables(msg_id: String, attribute_status: String, component: String, variable: String, attribute_value: Option<String>) -> String {
+    let mut payload = object!{
+        "getVariableResult" => array![
+            object!{
+                "attributeStatus" => attribute_status.to_string(),
+                "component" => component.to_string(),
+                "variable" => object!{
+                    "name" => variable.to_string(),
+                },
+            }
+        ],
+    };
+
+    match attribute_value {
+        Some(data) => payload["getVariableResult"][0]["attributeValue"] = data.into(),
+        _ => (),
     };
 
     wrap_call_result(msg_id, stringify(payload))
