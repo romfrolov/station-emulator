@@ -223,9 +223,9 @@ impl Handler for Client {
                     "GetVariables" => {
                         // Send GetVariables response.
 
-                        let set_variable_data = &payload["setVariableData"][0];
-                        let component = set_variable_data["component"].to_string();
-                        let variable_name = set_variable_data["variable"]["name"].to_string();
+                        let get_variable_data = &payload["getVariableData"][0];
+                        let component = get_variable_data["component"].to_string();
+                        let variable_name = get_variable_data["variable"]["name"].to_string();
 
                         let response_msg = match component == "AuthCtrlr" {
                             true => match variable_name == "AuthorizeRemoteStart" {
