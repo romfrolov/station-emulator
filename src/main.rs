@@ -35,9 +35,6 @@ const QUEUE_FETCH: Token = Token(2);
 const CALL: u8 = 2;
 const CALLRESULT: u8 = 3;
 const CALLERROR: u8 = 4;
-// Station constants.
-const MODEL: &str = "Model";
-const VENDOR_NAME: &str = "Vendor name";
 // Message queue constants.
 const QUEUE_FETCH_INTERVAL: u64 = 50;
 const QUEUE_MESSAGE_EXPIRATION: u64 = 10;
@@ -70,6 +67,7 @@ struct SentMessage {
 }
 
 lazy_static! {
+    // Array of EVSE each item of which contains an array of connectors.
     static ref EVSES: Mutex<[[Connector; 1]; 1]> = Mutex::new([[Connector { status: "Inoperative".to_string(), operational: true }]]);
     // Sent OCPP messages hash map: message id => stringified message.
     static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -168,10 +166,22 @@ impl Handler for Client {
             Err(e) => panic!("Couldn't read SERIAL_NUMBER ({})", e),
         };
 
+        // Get model from environment.
+        let model = match env::var("MODEL") {
+            Ok(var) => var,
+            _ => "Model".to_string(),
+        };
+
+        // Get vendor name from environment.
+        let vendor_name = match env::var("VENDOR_NAME") {
+            Ok(var) => var,
+            _ => "Vendor name".to_string(),
+        };
+
         // Send BootNotification request.
 
         let msg_id = Uuid::new_v4();
-        let msg = requests::boot_notification(msg_id.to_string(), serial_number, MODEL, VENDOR_NAME);
+        let msg = requests::boot_notification(msg_id.to_string(), serial_number, &model.to_owned(), &vendor_name.to_owned());
 
         set_message(msg_id.to_string(), msg.to_owned());
 

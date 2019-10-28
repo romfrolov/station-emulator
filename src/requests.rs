@@ -11,15 +11,15 @@ fn wrap_call(msg_id: String, action: String, payload: String) -> String {
 pub fn boot_notification(msg_id: String, serial_number: String, model: &str, vendor_name: &str) -> String {
     let action = "BootNotification".to_string();
     let payload = object!{
-        "reason" => "PowerUp",
+        "reason" => "PowerUp", // FIXME
         "chargingStation" => object!{
             "serialNumber" => serial_number,
             "model" => model,
             "vendorName" => vendor_name,
-            "firmwareVersion" => "0.1.0",
+            "firmwareVersion" => "0.1.0", // FIXME
             "modem" => object!{
-                "iccid" => "",
-                "imsi" => "",
+                "iccid" => "", // FIXME
+                "imsi" => "", // FIXME
             },
         },
     };
