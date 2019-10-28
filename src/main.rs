@@ -168,13 +168,13 @@ impl Handler for Client {
 
         // Get model from environment.
         let model = match env::var("MODEL") {
-            Ok(var) => var,
+            Ok(var) => if var == "" { "Model".to_string() } else { var },
             _ => "Model".to_string(),
         };
 
         // Get vendor name from environment.
         let vendor_name = match env::var("VENDOR_NAME") {
-            Ok(var) => var,
+            Ok(var) => if var == "" { "Vendor name".to_string() } else { var },
             _ => "Vendor name".to_string(),
         };
 
