@@ -48,4 +48,4 @@ After that the station emulator should start and send a `BootNotification` messa
 
 ### Wishlist
 
-1. Extend station configuration (including vendor name, model, connectors).
+1. Configuration of station's EVSE and connectors.
