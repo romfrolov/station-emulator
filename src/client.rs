@@ -56,7 +56,7 @@ lazy_static! {
     // Saved transactions. transaction id => stringified transaction.
     static ref TRANSACTIONS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     // Pending messages queue.
-    static ref Q: Mutex<Queue<String>> = Mutex::new(queue![]);
+    static ref QUEUE: Mutex<Queue<String>> = Mutex::new(queue![]);
     // Last sent message.
     static ref LAST_SENT_MESSAGE: Mutex<SentMessage> = Mutex::new(SentMessage { id: None, timestamp: None });
 }
@@ -102,18 +102,18 @@ fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
 }
 
 fn queue_size() -> usize {
-    Q.lock().unwrap().size()
+    QUEUE.lock().unwrap().size()
 }
 
 fn queue_add(s: String) {
-    match Q.lock().unwrap().add(s) {
+    match QUEUE.lock().unwrap().add(s) {
         Err(e) => println!("{:?}", e),
         _ => (),
     };
 }
 
 fn queue_pop() -> String {
-    match Q.lock().unwrap().remove() {
+    match QUEUE.lock().unwrap().remove() {
         Ok(res) => res,
         Err(_) => "".to_string(),
     }
