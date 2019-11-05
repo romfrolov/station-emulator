@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 dotenv = "0.14.1"
-ws = "0.9.0"
 url = "2.0.0"
 uuid = { version = "0.7", features = ["serde", "v4"] }
 mio-extras = "2.0"
@@ -15,3 +14,7 @@ lazy_static = "1.4.0"
 json = "*"
 chrono = "0.4"
 queues = "1.0.2"
+
+[dependencies.ws]
+version = "0.9.0"
+features = ["ssl"]
