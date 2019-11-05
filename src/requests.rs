@@ -4,12 +4,12 @@ use json::stringify;
 // OCPP constant.
 const CALL: u8 = 2;
 
-fn wrap_call(msg_id: String, action: String, payload: String) -> String {
+fn wrap_call(msg_id: &str, action: &str, payload: &str) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
-pub fn boot_notification(msg_id: String, serial_number: String, model: &str, vendor_name: &str) -> String {
-    let action = "BootNotification".to_string();
+pub fn boot_notification(msg_id: &str, serial_number: &str, model: &str, vendor_name: &str) -> String {
+    let action = "BootNotification";
     let payload = object!{
         "reason" => "PowerUp", // FIXME
         "chargingStation" => object!{
@@ -24,11 +24,11 @@ pub fn boot_notification(msg_id: String, serial_number: String, model: &str, ven
         },
     };
 
-    wrap_call(msg_id, action, stringify(payload))
+    wrap_call(msg_id, action, &stringify(payload)[..])
 }
 
-pub fn status_notification(msg_id: String, evse_id: u8, connector_id: u8, status: &str) -> String {
-    let action = "StatusNotification".to_string();
+pub fn status_notification(msg_id: &str, evse_id: u8, connector_id: u8, status: &str) -> String {
+    let action = "StatusNotification";
     let now = match Utc::now().with_nanosecond(0) {
         Some(res) => res.to_rfc3339(),
         None => panic!("Current date is empty."),
@@ -40,18 +40,18 @@ pub fn status_notification(msg_id: String, evse_id: u8, connector_id: u8, status
         "connectorId" => connector_id,
     };
 
-    wrap_call(msg_id, action, stringify(payload))
+    wrap_call(msg_id, action, &stringify(payload)[..])
 }
 
-pub fn heartbeat(msg_id: String) -> String {
-    let action = "Heartbeat".to_string();
-    let payload = "{}".to_string();
+pub fn heartbeat(msg_id: &str) -> String {
+    let action = "Heartbeat";
+    let payload = "{}";
 
     wrap_call(msg_id, action, payload)
 }
 
-pub fn transaction_event(msg_id: String, transaction_id: String, event_type: String, trigger_reason: String, charging_state: Option<String>, remote_start_id: Option<u64>, stopped_reason: Option<String>) -> String {
-    let action = "TransactionEvent".to_string();
+pub fn transaction_event(msg_id: &str, transaction_id: &str, event_type: &str, trigger_reason: &str, charging_state: Option<&str>, remote_start_id: Option<u64>, stopped_reason: Option<&str>) -> String {
+    let action = "TransactionEvent";
     let now = match Utc::now().with_nanosecond(0) {
         Some(res) => res.to_rfc3339(),
         None => panic!("Current date is empty."),
@@ -81,5 +81,5 @@ pub fn transaction_event(msg_id: String, transaction_id: String, event_type: Str
         _ => (),
     };
 
-    wrap_call(msg_id, action, stringify(payload))
+    wrap_call(msg_id, action, &stringify(payload)[..])
 }
