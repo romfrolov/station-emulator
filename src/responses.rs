@@ -21,7 +21,7 @@ pub fn set_variables(msg_id: &str, attribute_status: &str, component: &str, vari
         ],
     };
 
-    wrap_call_result(msg_id, &stringify(payload)[..])
+    wrap_call_result(msg_id, &stringify(payload))
 }
 
 // TODO Support of array of variables.
@@ -43,7 +43,7 @@ pub fn get_variables(msg_id: &str, attribute_status: &str, component: &str, vari
         _ => (),
     };
 
-    wrap_call_result(msg_id, &stringify(payload)[..])
+    wrap_call_result(msg_id, &stringify(payload))
 }
 
 pub fn request_start_transaction(msg_id: &str, remote_start_id: u64, status: &str) -> String {
@@ -52,7 +52,7 @@ pub fn request_start_transaction(msg_id: &str, remote_start_id: u64, status: &st
         "status" => status,
     };
 
-    wrap_call_result(msg_id, &stringify(payload)[..])
+    wrap_call_result(msg_id, &stringify(payload))
 }
 
 pub fn request_stop_transaction(msg_id: &str, status: &str) -> String {
@@ -60,5 +60,5 @@ pub fn request_stop_transaction(msg_id: &str, status: &str) -> String {
         "status" => status,
     };
 
-    wrap_call_result(msg_id, &stringify(payload)[..])
+    wrap_call_result(msg_id, &stringify(payload))
 }

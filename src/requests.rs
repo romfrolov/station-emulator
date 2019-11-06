@@ -24,7 +24,7 @@ pub fn boot_notification(msg_id: &str, serial_number: &str, model: &str, vendor_
         },
     };
 
-    wrap_call(msg_id, action, &stringify(payload)[..])
+    wrap_call(msg_id, action, &stringify(payload))
 }
 
 pub fn status_notification(msg_id: &str, evse_id: u8, connector_id: u8, status: &str) -> String {
@@ -40,7 +40,7 @@ pub fn status_notification(msg_id: &str, evse_id: u8, connector_id: u8, status: 
         "connectorId" => connector_id,
     };
 
-    wrap_call(msg_id, action, &stringify(payload)[..])
+    wrap_call(msg_id, action, &stringify(payload))
 }
 
 pub fn heartbeat(msg_id: &str) -> String {
@@ -81,5 +81,5 @@ pub fn transaction_event(msg_id: &str, transaction_id: &str, event_type: &str, t
         _ => (),
     };
 
-    wrap_call(msg_id, action, &stringify(payload)[..])
+    wrap_call(msg_id, action, &stringify(payload))
 }
