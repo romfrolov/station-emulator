@@ -5,6 +5,8 @@
 
 Electric vehicle charging station emulator which supports OCPP 2.0.
 
+[List of supported messages and use cases.](./SUPPORTED.md)
+
 ### Quick start
 
 1. Create and configure `.env`.
@@ -27,8 +29,6 @@ cargo run
 ```
 
 After that the station emulator should start and send a `BootNotification` message to CSMS.
-
-[List of supported messages and use cases.](./SUPPORTED.md)
 
 ### Wishlist
 
