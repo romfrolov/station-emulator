@@ -28,23 +28,7 @@ cargo run
 
 After that the station emulator should start and send a `BootNotification` message to CSMS.
 
-### List of supported messages
-
-- [x] boot
-  - [x] - BootNotification
-  - [x] - Heartbeat
-  - [x] - StatusNotification
-- [x] transaction
-  - [x] - TransactionEvent
-  - [x] - RequestStartTransaction (only remote authorization)
-  - [x] - RequestStopTransaction
-- [ ] settings
-  - [x] - SetVariables
-  - [x] - GetVariables
-  - [ ] - ChangeAvailability
-- [ ] reservations
-  - [ ] - ReserveNow
-  - [ ] - CancelReservation
+[List of supported messages and use cases.](./SUPPORTED.md)
 
 ### Wishlist
 
