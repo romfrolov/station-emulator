@@ -8,19 +8,14 @@ fn wrap_call(msg_id: &str, action: &str, payload: &str) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
-pub fn boot_notification(msg_id: &str, serial_number: &str, model: &str, vendor_name: &str) -> String {
+pub fn boot_notification(msg_id: &str, reason: &str, serial_number: &str, model: &str, vendor_name: &str) -> String {
     let action = "BootNotification";
     let payload = object!{
-        "reason" => "PowerUp", // FIXME
+        "reason" => reason,
         "chargingStation" => object!{
             "serialNumber" => serial_number,
             "model" => model,
             "vendorName" => vendor_name,
-            "firmwareVersion" => "0.1.0", // FIXME
-            "modem" => object!{
-                "iccid" => "", // FIXME
-                "imsi" => "", // FIXME
-            },
         },
     };
 
