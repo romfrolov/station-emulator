@@ -29,8 +29,3 @@ cargo run
 ```
 
 After that the station emulator should start and send a `BootNotification` message to CSMS.
-
-### Wishlist
-
-1. Configuration of station's EVSE and connectors.
-2. List of required components and variables.
