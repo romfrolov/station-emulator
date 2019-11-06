@@ -1,7 +1,7 @@
 ## Station emulator
 *Work in progress*
 
-![](https://github.com/romfrolov/station-emulator/workflows/build/badge.svg)
+![](https://github.com/romfrolov/station-emulator/workflows/build/badge.svg) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Electric vehicle charging station emulator which supports OCPP 2.0.
 
