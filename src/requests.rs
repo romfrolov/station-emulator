@@ -8,15 +8,19 @@ fn wrap_call(msg_id: &str, action: &str, payload: &str) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }
 
-pub fn boot_notification(msg_id: &str, reason: &str, serial_number: &str, model: &str, vendor_name: &str) -> String {
+pub fn boot_notification(msg_id: &str, reason: &str, model: &str, vendor_name: &str, serial_number: Option<String>) -> String {
     let action = "BootNotification";
-    let payload = object!{
+    let mut payload = object!{
         "reason" => reason,
         "chargingStation" => object!{
-            "serialNumber" => serial_number,
             "model" => model,
             "vendorName" => vendor_name,
         },
+    };
+
+    match serial_number {
+        Some(data) => payload["chargingStation"]["serialNumber"] = data.into(),
+        _ => (),
     };
 
     wrap_call(msg_id, action, &stringify(payload))

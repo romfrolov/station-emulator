@@ -143,28 +143,28 @@ impl Handler for Client {
         // Start queue worker.
         self.out.timeout(QUEUE_FETCH_INTERVAL, QUEUE_FETCH)?;
 
-        // Get serial number from environment.
-        let serial_number = match env::var("SERIAL_NUMBER") {
-            Ok(var) => var,
-            Err(e) => panic!("Couldn't read SERIAL_NUMBER ({})", e),
-        };
-
         // Get model from environment.
-        let model = match env::var("MODEL") {
+        let model: String = match env::var("MODEL") {
             Ok(var) => if var == "" { "Model".to_string() } else { var },
             _ => "Model".to_string(),
         };
 
         // Get vendor name from environment.
-        let vendor_name = match env::var("VENDOR_NAME") {
+        let vendor_name: String = match env::var("VENDOR_NAME") {
             Ok(var) => if var == "" { "Vendor name".to_string() } else { var },
             _ => "Vendor name".to_string(),
+        };
+
+        // Get serial number from environment.
+        let serial_number: Option<String> = match env::var("SERIAL_NUMBER") {
+            Ok(data) => Some(data),
+            _ => None,
         };
 
         // Send BootNotification request.
 
         let msg_id: &str = &Uuid::new_v4().to_string();
-        let msg = requests::boot_notification(msg_id, "PowerUp", &serial_number, &model, &vendor_name);
+        let msg = requests::boot_notification(msg_id, "PowerUp", &model, &vendor_name, serial_number);
 
         set_message(msg_id.to_string(), msg.to_owned());
 

@@ -21,7 +21,6 @@ mod client;
 struct Config {
     csms_url: String,
     station_id: String,
-    serial_number: String,
 }
 
 fn main() {
@@ -37,19 +36,13 @@ fn main() {
         Err(e) => panic!("Couldn't read STATION_ID ({})", e),
     };
 
-    let serial_number = match env::var("SERIAL_NUMBER") {
-        Ok(var) => var,
-        Err(e) => panic!("Couldn't read SERIAL_NUMBER ({})", e),
-    };
-
     let config = Config {
         csms_url: csms_url,
         station_id: station_id,
-        serial_number: serial_number
     };
 
     println!("OCPP version: 2.0");
-    println!("Serial number: {:?}", config.serial_number);
+    println!("CSMS url: {:?}", config.csms_url);
     println!("Station id: {:?}", config.station_id);
 
     let mut connection_string: String = config.csms_url.to_owned();
