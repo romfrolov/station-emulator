@@ -12,6 +12,7 @@ use json::JsonValue;
 
 use crate::requests;
 use crate::responses;
+use crate::components;
 
 macro_rules! block {
     ($xs:block) => {
@@ -201,15 +202,17 @@ impl Handler for Client {
                         // Send SetVariables response.
 
                         let set_variable_data = &payload["setVariableData"][0];
-                        let component = &set_variable_data["component"].to_string();
-                        let variable_name = &set_variable_data["variable"]["name"].to_string();
+                        let component: &str = &set_variable_data["component"].to_string();
+                        let variable_name: &str = &set_variable_data["variable"]["name"].to_string();
 
-                        let response_msg: String = match component == "AuthCtrlr" {
-                            true => match variable_name == "AuthorizeRemoteStart" {
-                                true => responses::set_variables(msg_id, "Rejected", component, variable_name),
-                                false => responses::set_variables(msg_id, "UnknownVariable", component, variable_name),
+                        let response_msg: String = match component {
+                            "AuthCtrlr" => {
+                                match variable_name {
+                                    "AuthorizeRemoteStart" => responses::set_variables(msg_id, "Rejected", component, variable_name),
+                                    _ => responses::set_variables(msg_id, "UnknownVariable", component, variable_name),
+                                }
                             },
-                            false => responses::set_variables(msg_id, "UnknownComponent", component, variable_name),
+                            _ => responses::set_variables(msg_id, "UnknownComponent", component, variable_name),
                         };
 
                         self.out.send(response_msg)?;
@@ -218,16 +221,12 @@ impl Handler for Client {
                         // Send GetVariables response.
 
                         let get_variable_data = &payload["getVariableData"][0];
-                        let component = &get_variable_data["component"].to_string();
-                        let variable_name = &get_variable_data["variable"]["name"].to_string();
+                        let component: &str = &get_variable_data["component"].to_string();
+                        let variable_name: &str = &get_variable_data["variable"]["name"].to_string();
 
-                        let response_msg: String = match component == "AuthCtrlr" {
-                            true => match variable_name == "AuthorizeRemoteStart" {
-                                true => responses::get_variables(msg_id, "Accepted", component, variable_name, Some("false")),
-                                false => responses::get_variables(msg_id, "UnknownVariable", component, variable_name, None),
-                            },
-                            false => responses::get_variables(msg_id, "UnknownComponent", component, variable_name, None),
-                        };
+                        let (attribute_status, variable_value): (&str, Option<&str>) = components::get_variable(component, variable_name);
+
+                        let response_msg: String = responses::get_variables(msg_id, attribute_status, component, variable_name, variable_value);
 
                         self.out.send(response_msg)?;
                     }
