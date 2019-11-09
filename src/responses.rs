@@ -1,4 +1,5 @@
 use json::stringify;
+use json::JsonValue;
 
 // OCPP constant.
 const CALLRESULT: u8 = 3;
@@ -24,23 +25,9 @@ pub fn set_variables(msg_id: &str, attribute_status: &str, component: &str, vari
     wrap_call_result(msg_id, &stringify(payload))
 }
 
-// TODO Support of array of variables.
-pub fn get_variables(msg_id: &str, attribute_status: &str, component: &str, variable: &str, attribute_value: Option<&str>) -> String {
-    let mut payload = object!{
-        "getVariableResult" => array![
-            object!{
-                "attributeStatus" => attribute_status,
-                "component" => component,
-                "variable" => object!{
-                    "name" => variable,
-                },
-            }
-        ],
-    };
-
-    match attribute_value {
-        Some(data) => payload["getVariableResult"][0]["attributeValue"] = data.into(),
-        _ => (),
+pub fn get_variables(msg_id: &str, variables: JsonValue) -> String {
+    let payload = object!{
+        "getVariableResult" => variables,
     };
 
     wrap_call_result(msg_id, &stringify(payload))

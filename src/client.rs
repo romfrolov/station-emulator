@@ -220,13 +220,34 @@ impl Handler for Client {
                     "GetVariables" => {
                         // Send GetVariables response.
 
-                        let get_variable_data = &payload["getVariableData"][0];
-                        let component: &str = &get_variable_data["component"].to_string();
-                        let variable_name: &str = &get_variable_data["variable"]["name"].to_string();
+                        let get_variable_data_array = &payload["getVariableData"];
 
-                        let (attribute_status, variable_value): (&str, Option<&str>) = components::get_variable(component, variable_name);
+                        let mut variables: JsonValue = JsonValue::new_array();
 
-                        let response_msg: String = responses::get_variables(msg_id, attribute_status, component, variable_name, variable_value);
+                        for i in 0..get_variable_data_array.len() {
+                            let get_variable_data = &get_variable_data_array[i];
+                            let component_name: &str = &get_variable_data["component"].to_string();
+                            let variable_name: &str = &get_variable_data["variable"]["name"].to_string();
+
+                            let (attribute_status, attribute_value): (&str, Option<&str>) = components::get_variable(component_name, variable_name);
+
+                            let mut variable = object!{
+                                "attributeStatus" => attribute_status,
+                                "component" => component_name,
+                                "variable" => object!{
+                                    "name" => variable_name,
+                                },
+                            };
+
+                            match attribute_value {
+                                Some(data) => variable["attributeValue"] = data.into(),
+                                _ => (),
+                            };
+
+                            variables.push(variable).unwrap();
+                        }
+
+                        let response_msg: String = responses::get_variables(msg_id, variables);
 
                         self.out.send(response_msg)?;
                     }

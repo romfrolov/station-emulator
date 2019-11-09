@@ -14,8 +14,8 @@ use ws::{connect};
 
 mod requests;
 mod responses;
-mod client;
 mod components;
+mod client;
 
 // Station configuration struct.
 #[derive(Debug)]
