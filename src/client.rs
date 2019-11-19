@@ -201,19 +201,36 @@ impl Handler for Client {
                     "SetVariables" => {
                         // Send SetVariables response.
 
-                        let set_variable_data = &payload["setVariableData"][0];
-                        let component: &str = &set_variable_data["component"].to_string();
-                        let variable_name: &str = &set_variable_data["variable"]["name"].to_string();
+                        let set_variable_data_array = &payload["setVariableData"];
 
-                        let response_msg: String = match component {
-                            "AuthCtrlr" => {
-                                match variable_name {
-                                    "AuthorizeRemoteStart" => responses::set_variables(msg_id, "Rejected", component, variable_name),
-                                    _ => responses::set_variables(msg_id, "UnknownVariable", component, variable_name),
-                                }
-                            },
-                            _ => responses::set_variables(msg_id, "UnknownComponent", component, variable_name),
-                        };
+                        let mut variables: JsonValue = JsonValue::new_array();
+
+                        for i in 0..set_variable_data_array.len() {
+                            let set_variable_data = &set_variable_data_array[i];
+                            let component_name: &str = &set_variable_data["component"].to_string();
+                            let variable_name: &str = &set_variable_data["variable"]["name"].to_string();
+
+                            let mut variable = object!{
+                                "component" => component_name,
+                                "variable" => object!{
+                                    "name" => variable_name,
+                                },
+                            };
+
+                            match component_name {
+                                "AuthCtrlr" => {
+                                    match variable_name {
+                                        "AuthorizeRemoteStart" => variable["attributeStatus"] = "Rejected".into(),
+                                        _ => variable["attributeStatus"] = "UnknownVariable".into(),
+                                    }
+                                },
+                                _ => variable["attributeStatus"] = "UnknownComponent".into(),
+                            };
+
+                            variables.push(variable).unwrap();
+                        }
+
+                        let response_msg: String = responses::set_variables(msg_id, variables);
 
                         self.out.send(response_msg)?;
                     },

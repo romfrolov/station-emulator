@@ -8,18 +8,9 @@ fn wrap_call_result(msg_id: &str, payload: &str) -> String {
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
 }
 
-// TODO Support of array of variables.
-pub fn set_variables(msg_id: &str, attribute_status: &str, component: &str, variable: &str) -> String {
+pub fn set_variables(msg_id: &str, variables: JsonValue) -> String {
     let payload = object!{
-        "setVariableResult" => array![
-            object!{
-                "attributeStatus" => attribute_status,
-                "component" => component,
-                "variable" => object!{
-                    "name" => variable,
-                },
-            }
-        ],
+        "setVariableResult" => variables,
     };
 
     wrap_call_result(msg_id, &stringify(payload))
