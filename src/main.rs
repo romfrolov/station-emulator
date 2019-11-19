@@ -17,13 +17,17 @@ mod responses;
 mod components;
 mod client;
 
-// Station configuration struct.
+/// Station configuration struct.
 #[derive(Debug)]
 struct Config {
     csms_url: String,
     station_id: String,
 }
 
+/// Starts a charging station.
+///
+/// Initializes configuration variables from the environment.
+/// Starts a WebSocket client.
 fn main() {
     dotenv::dotenv().expect("Failed to read .env file");
 

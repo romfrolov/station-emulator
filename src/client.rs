@@ -14,6 +14,7 @@ use crate::requests;
 use crate::responses;
 use crate::components;
 
+/// This macro allows to break from a code block outside of a loop.
 macro_rules! block {
     ($xs:block) => {
         loop { let _ = $xs; break; }
@@ -130,16 +131,22 @@ fn get_last_sent_message() -> SentMessage {
     LAST_SENT_MESSAGE.lock().unwrap().clone()
 }
 
-// We implement the Handler trait for Client so that we can get more
-// fine-grained control of the connection.
+/// We implement the Handler trait for Client so that we can get more
+/// fine-grained control of the connection.
 impl Handler for Client {
 
+    /// Add protocol to initial handshake request.
     fn build_request(&mut self, url: &url::Url) -> Result<Request> {
         let mut req = Request::from_url(url).unwrap();
         req.add_protocol("ocpp2.0");
         Ok(req)
     }
 
+    /// Called when the WebSocket handshake is successful and the connection is open for sending
+    /// and receiving messages.
+    ///
+    /// Configures interval between fetches in the message queue.
+    /// Sends BootNotification message to the message queue.
     fn on_open(&mut self, _: Handshake) -> Result<()> {
         // Start queue worker.
         self.out.timeout(QUEUE_FETCH_INTERVAL, QUEUE_FETCH)?;
@@ -174,6 +181,9 @@ impl Handler for Client {
         Ok(())
     }
 
+    /// Called on incoming messages.
+    ///
+    /// Handles requests and responses from the Charging Station Management System.
     fn on_message(&mut self, msg: Message) -> Result<()> {
         let parsed_msg = match json::parse(msg.as_text()?) {
             Ok(result) => result,
@@ -457,18 +467,23 @@ impl Handler for Client {
         Ok(())
     }
 
+    /// Called any time this endpoint receives a close control frame.
     fn on_close(&mut self, code: CloseCode, reason: &str) {
        println!("WebSocket closing for ({:?}) {}", code, reason);
        println!("Shutting down server after first connection closes.");
        self.out.shutdown().unwrap();
    }
 
-   // Shutdown on any error.
+   /// Shutdown on any error.
    fn on_error(&mut self, err: Error) {
         println!("Shutting down server for error: {}", err);
         self.out.shutdown().unwrap();
     }
 
+    /// Called when a timeout has been scheduled on the eventloop.
+    ///
+    /// Sends Heartbeat message.
+    /// Fetches and sends messages from the message queue.
     fn on_timeout(&mut self, event: Token) -> Result<()> {
         match event {
             HEARTBEAT => {
