@@ -4,6 +4,7 @@ use json::stringify;
 // OCPP constant.
 const CALL: u8 = 2;
 
+/// Wrap a CALL message.
 fn wrap_call(msg_id: &str, action: &str, payload: &str) -> String {
     format!("[{}, \"{}\", \"{}\", {}]", CALL, msg_id, action, payload)
 }

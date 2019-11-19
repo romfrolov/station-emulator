@@ -4,6 +4,7 @@ use json::JsonValue;
 // OCPP constant.
 const CALLRESULT: u8 = 3;
 
+/// Wrap a CALLRESULT message.
 fn wrap_call_result(msg_id: &str, payload: &str) -> String {
     format!("[{}, \"{}\", {}]", CALLRESULT, msg_id, payload)
 }
