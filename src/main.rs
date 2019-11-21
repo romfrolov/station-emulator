@@ -15,6 +15,7 @@ use ws::{connect};
 mod requests;
 mod responses;
 mod components;
+mod storage;
 mod client;
 
 /// Station configuration struct.

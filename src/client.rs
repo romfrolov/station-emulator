@@ -1,18 +1,16 @@
 use std::env;
-use std::collections::HashMap;
-use std::sync::Mutex;
 
 use url;
 use ws::util::Token;
 use ws::{Handler, Sender, Handshake, Result, Message, Request, Error, ErrorKind, CloseCode};
 use uuid::Uuid;
-use queues::*;
 use chrono::prelude::*;
 use json::JsonValue;
 
 use crate::requests;
 use crate::responses;
 use crate::components;
+use crate::storage;
 
 /// This macro allows to break from a code block outside of a loop.
 macro_rules! block {
@@ -20,6 +18,8 @@ macro_rules! block {
         loop { let _ = $xs; break; }
     };
 }
+
+static mut HEARTBEAT_INTERVAL: u64 = 0;
 
 // Timeout events.
 const HEARTBEAT: Token = Token(1);
@@ -35,100 +35,6 @@ const QUEUE_MESSAGE_EXPIRATION: u64 = 10;
 // Websocket Handler struct.
 pub struct Client {
     pub out: Sender,
-}
-
-// Connector struct.
-#[derive(Clone, Debug)]
-struct Connector {
-    status: &'static str,
-    operational: bool,
-}
-
-// Basic information about sent message.
-#[derive(Clone, Debug)]
-struct SentMessage {
-    id: Option<String>,
-    timestamp: Option<u64>,
-}
-
-lazy_static! {
-    // Array of EVSE each item of which contains an array of connectors.
-    static ref EVSES: Mutex<[[Connector; 1]; 1]> = Mutex::new([[Connector { status: "Inoperative", operational: true }]]);
-    // Sent OCPP messages hash map: message id => stringified message.
-    static ref MESSAGES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-    // Saved transactions. transaction id => stringified transaction.
-    static ref TRANSACTIONS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-    // Pending messages queue.
-    static ref QUEUE: Mutex<Queue<String>> = Mutex::new(queue![]);
-    // Last sent message.
-    static ref LAST_SENT_MESSAGE: Mutex<SentMessage> = Mutex::new(SentMessage { id: None, timestamp: None });
-}
-
-static mut HEARTBEAT_INTERVAL: u64 = 0;
-
-fn set_message(key: String, value: String) {
-    MESSAGES.lock().unwrap().insert(key, value);
-}
-
-fn get_message(key: &str) -> String {
-    match MESSAGES.lock().unwrap().get(key) {
-        Some(value) => value.to_string(),
-        None => String::from(""),
-    }
-}
-
-fn set_transaction(key: String, value: String) {
-    TRANSACTIONS.lock().unwrap().insert(key, value);
-}
-
-fn get_transaction(key: &str) -> String {
-    match TRANSACTIONS.lock().unwrap().get(key) {
-        Some(value) => value.to_string(),
-        None => String::from(""),
-    }
-}
-
-fn delete_transaction(key: &str) {
-    TRANSACTIONS.lock().unwrap().remove(key);
-}
-
-fn set_connector_status(evse_index: usize, connector_index: usize, value: &'static str) {
-    EVSES.lock().unwrap()[evse_index][connector_index].status = value;
-}
-// NOTE Unused.
-// fn set_connector_operational_status(evse_index: usize, connector_index: usize, value: bool) {
-//     EVSES.lock().unwrap()[evse_index][connector_index].operational = value;
-// }
-
-fn get_connector(evse_index: usize, connector_index: usize) -> Connector {
-    EVSES.lock().unwrap()[evse_index][connector_index].clone()
-}
-
-fn queue_size() -> usize {
-    QUEUE.lock().unwrap().size()
-}
-
-fn queue_add(s: String) {
-    match QUEUE.lock().unwrap().add(s) {
-        Err(e) => println!("{:?}", e),
-        _ => (),
-    };
-}
-
-fn queue_pop() -> String {
-    match QUEUE.lock().unwrap().remove() {
-        Ok(res) => res,
-        Err(_) => String::from(""),
-    }
-}
-
-fn set_last_sent_message(id: String, timestamp: u64) {
-    LAST_SENT_MESSAGE.lock().unwrap().id = Some(id);
-    LAST_SENT_MESSAGE.lock().unwrap().timestamp = Some(timestamp);
-}
-
-fn get_last_sent_message() -> SentMessage {
-    LAST_SENT_MESSAGE.lock().unwrap().clone()
 }
 
 /// We implement the Handler trait for Client so that we can get more
@@ -174,9 +80,9 @@ impl Handler for Client {
         let msg_id: &str = &Uuid::new_v4().to_string();
         let msg = requests::boot_notification(msg_id, "PowerUp", &model, &vendor_name, serial_number);
 
-        set_message(msg_id.to_string(), msg.to_owned());
+        storage::set_message(msg_id.to_string(), msg.to_owned());
 
-        queue_add(msg);
+        storage::queue_add(msg);
 
         Ok(())
     }
@@ -294,7 +200,7 @@ impl Handler for Client {
                         };
 
                         // FIXME Magic number (connector index).
-                        let connector = get_connector(evse_id - 1, 0);
+                        let connector = storage::get_connector(evse_id - 1, 0);
 
                         let mut response_status = "Accepted";
 
@@ -318,37 +224,37 @@ impl Handler for Client {
                         let status_notification_msg_id: &str = &Uuid::new_v4().to_string();
                         let status_notification_msg = requests::status_notification(status_notification_msg_id, 1, 1, connector_status);
 
-                        set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
+                        storage::set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                        queue_add(status_notification_msg);
+                        storage::queue_add(status_notification_msg);
 
-                        set_connector_status(0, 0, connector_status);
+                        storage::set_connector_status(0, 0, connector_status);
 
                         // Send "Started" TransactionEvent request to notify CSMS about the started transaction.
 
                         let transaction_event_started_msg_id: &str = &Uuid::new_v4().to_string();
                         let transaction_event_started_msg = requests::transaction_event(transaction_event_started_msg_id, transaction_id, "Started", "RemoteStart", None, Some(remote_start_id), None);
 
-                        set_message(transaction_event_started_msg_id.to_string(), transaction_event_started_msg.to_owned());
+                        storage::set_message(transaction_event_started_msg_id.to_string(), transaction_event_started_msg.to_owned());
 
-                        queue_add(transaction_event_started_msg);
+                        storage::queue_add(transaction_event_started_msg);
 
                         // Save transaction.
-                        set_transaction(transaction_id.to_string(), payload.dump());
+                        storage::set_transaction(transaction_id.to_string(), payload.dump());
 
                         // Send "Updated" TransactionEvent request to notify CSMS about the plugged in cable.
 
                         let transaction_event_updated_msg_id: &str = &Uuid::new_v4().to_string();
                         let transaction_event_updated_msg = requests::transaction_event(transaction_event_updated_msg_id, transaction_id, "Updated", "CablePluggedIn", Some("Charging"), None, None);
 
-                        set_message(transaction_event_updated_msg_id.to_string(), transaction_event_updated_msg.to_owned());
+                        storage::set_message(transaction_event_updated_msg_id.to_string(), transaction_event_updated_msg.to_owned());
 
-                        queue_add(transaction_event_updated_msg);
+                        storage::queue_add(transaction_event_updated_msg);
                     },
                     "RequestStopTransaction" => {
                         let transaction_id: &str = &payload["transactionId"].to_string();
                         // Get transaction from hash map.
-                        let transaction = get_transaction(transaction_id);
+                        let transaction = storage::get_transaction(transaction_id);
 
                         let response_status = match transaction.as_str() {
                             "" => "Rejected",
@@ -370,21 +276,21 @@ impl Handler for Client {
                         let transaction_event_updated_msg_id: &str = &Uuid::new_v4().to_string();
                         let transaction_event_updated_msg = requests::transaction_event(transaction_event_updated_msg_id, transaction_id, "Updated", "RemoteStop", None, None, None);
 
-                        set_message(transaction_event_updated_msg_id.to_string(), transaction_event_updated_msg.to_owned());
+                        storage::set_message(transaction_event_updated_msg_id.to_string(), transaction_event_updated_msg.to_owned());
 
-                        queue_add(transaction_event_updated_msg);
+                        storage::queue_add(transaction_event_updated_msg);
 
                         // Send "Ended" TransactionEvent request.
 
                         let transaction_event_ended_msg_id: &str = &Uuid::new_v4().to_string();
                         let transaction_event_ended_msg = requests::transaction_event(transaction_event_ended_msg_id, transaction_id, "Ended", "RemoteStop", None, None, Some("Remote"));
 
-                        set_message(transaction_event_ended_msg_id.to_string(), transaction_event_ended_msg.to_owned());
+                        storage::set_message(transaction_event_ended_msg_id.to_string(), transaction_event_ended_msg.to_owned());
 
-                        queue_add(transaction_event_ended_msg);
+                        storage::queue_add(transaction_event_ended_msg);
 
                         // Delete transaction.
-                        delete_transaction(transaction_id);
+                        storage::delete_transaction(transaction_id);
 
                         // Set EVSE status to "Available" and send StatusNotification with updated status.
 
@@ -392,11 +298,11 @@ impl Handler for Client {
                         let status_notification_msg_id: &str = &Uuid::new_v4().to_string();
                         let status_notification_msg = requests::status_notification(status_notification_msg_id, 1, 1, connector_status);
 
-                        set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
+                        storage::set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                        queue_add(status_notification_msg);
+                        storage::queue_add(status_notification_msg);
 
-                        set_connector_status(0, 0, connector_status);
+                        storage::set_connector_status(0, 0, connector_status);
                     },
                     _ => println!("No request handler for action: {}", action),
                 }
@@ -404,7 +310,7 @@ impl Handler for Client {
             CALLRESULT => block!({
                 let payload: &JsonValue = &parsed_msg[2];
 
-                let msg_from_map = get_message(msg_id);
+                let msg_from_map = storage::get_message(msg_id);
 
                 if msg_from_map == "" {
                     break;
@@ -431,11 +337,11 @@ impl Handler for Client {
                             let status_notification_msg_id: &str = &Uuid::new_v4().to_string();
                             let status_notification_msg = requests::status_notification(status_notification_msg_id, 1, 1, connector_status);
 
-                            set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
+                            storage::set_message(status_notification_msg_id.to_string(), status_notification_msg.to_owned());
 
-                            queue_add(status_notification_msg);
+                            storage::queue_add(status_notification_msg);
 
-                            set_connector_status(0, 0, connector_status);
+                            storage::set_connector_status(0, 0, connector_status);
 
                             // Schedule a Heartbeat using the interval from BootNotification.
 
@@ -492,9 +398,9 @@ impl Handler for Client {
                 let msg_id: &str = &Uuid::new_v4().to_string();
                 let msg = requests::heartbeat(msg_id);
 
-                set_message(msg_id.to_string(), msg.to_owned());
+                storage::set_message(msg_id.to_string(), msg.to_owned());
 
-                queue_add(msg);
+                storage::queue_add(msg);
 
                 // Schedule next message.
                 unsafe {
@@ -506,7 +412,7 @@ impl Handler for Client {
             QUEUE_FETCH => {
                 let current_timestamp: u64 = Utc::now().timestamp() as u64;
 
-                let last_sent_msg = get_last_sent_message();
+                let last_sent_msg = storage::get_last_sent_message();
                 // Check whether last sent message exists or not.
                 let last_sent_msg_exist: bool = last_sent_msg.id != None;
                 // Check whether last sent message has expired or not.
@@ -515,8 +421,8 @@ impl Handler for Client {
                     None => true,
                 };
 
-                if queue_size() > 0 && (!last_sent_msg_exist || last_sent_msg_expired) {
-                    let msg = queue_pop();
+                if storage::queue_size() > 0 && (!last_sent_msg_exist || last_sent_msg_expired) {
+                    let msg = storage::queue_pop();
 
                     if msg != "" {
                         let parsed_msg = match json::parse(&msg.to_owned()) {
@@ -531,7 +437,7 @@ impl Handler for Client {
 
                         println!("{} ({}) was sent.", msg_action, msg_id);
 
-                        set_last_sent_message(msg_id.to_string(), current_timestamp);
+                        storage::set_last_sent_message(msg_id.to_string(), current_timestamp);
                     }
                 }
 
