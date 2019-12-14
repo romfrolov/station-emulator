@@ -1,5 +1,4 @@
 ## Station emulator
-*Work in progress*
 
 ![](https://github.com/romfrolov/station-emulator/workflows/build/badge.svg) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
